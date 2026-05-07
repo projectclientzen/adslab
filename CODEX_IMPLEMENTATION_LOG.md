@@ -6,7 +6,11 @@
   - `CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`
   - tabel `ads_detail` dengan 14 field sesuai PRD
   - `UNIQUE` constraint pada `library_id`
-  - 4 index untuk `library_id`, `advertiser_name`, `funnel_type`, dan `created_at DESC`
+  - 3 index eksplisit untuk `advertiser_name`, `funnel_type`, dan `created_at DESC`
+  - 1 index btree otomatis pada `library_id` dari `UNIQUE` constraint, tanpa index duplikat tambahan
   - `CHECK` constraints untuk `creative_type`, `funnel_type`, `campaign_stage`, dan `stage_confidence`
 - Tidak ada task lain yang dikerjakan atau file fungsional lain yang diubah.
 - Validasi dilakukan dengan grep checks dan eksekusi migration ke PostgreSQL lokal sementara; detail output disimpan di `TEST_RESULTS.md`.
+- Revisi setelah review Claude:
+  - menghapus `CREATE INDEX IF NOT EXISTS idx_ads_detail_library_id ON ads_detail(library_id);`
+  - mempertahankan `library_id TEXT UNIQUE NOT NULL` agar deduplication dan auto-generated btree index tetap ada

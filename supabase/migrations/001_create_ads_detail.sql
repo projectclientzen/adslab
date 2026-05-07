@@ -17,7 +17,6 @@ CREATE TABLE IF NOT EXISTS ads_detail (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_ads_detail_library_id ON ads_detail(library_id);
 CREATE INDEX IF NOT EXISTS idx_ads_detail_advertiser ON ads_detail(advertiser_name);
 CREATE INDEX IF NOT EXISTS idx_ads_detail_funnel ON ads_detail(funnel_type);
 CREATE INDEX IF NOT EXISTS idx_ads_detail_created ON ads_detail(created_at DESC);

@@ -1,4 +1,4 @@
-# TEST_RESULTS — TASK-001
+# TEST_RESULTS — TASK-001 (Revisi Claude)
 
 Tanggal: 2026-05-07
 
@@ -11,7 +11,7 @@ ls -la supabase/migrations/001_create_ads_detail.sql
 
 Output:
 ```text
--rw-r--r--  1 maszen  admin  1044 May  7 15:52 supabase/migrations/001_create_ads_detail.sql
+-rw-r--r--  1 maszen  admin  964 May  7 16:19 supabase/migrations/001_create_ads_detail.sql
 ```
 
 ## 2. Required field presence check
@@ -23,10 +23,10 @@ grep -E "library_id|ad_copy|creative_type|cta_button|destination_url|date_active
 
 Output:
 ```text
-13
+      12
 ```
 
-Catatan: hasil `13` valid karena beberapa field yang dicek muncul pada baris `CHECK` constraint yang sama dengan definisinya.
+Catatan: hasil `12` valid karena beberapa field yang dicek muncul pada baris `CHECK` constraint yang sama dengan definisinya.
 
 ## 3. UNIQUE constraint check
 
@@ -55,7 +55,7 @@ Output:
     stage_confidence FLOAT CHECK (stage_confidence >= 0 AND stage_confidence <= 1),
 ```
 
-## 5. Index definition check
+## 5. Explicit index definition check
 
 Command:
 ```bash
@@ -64,11 +64,12 @@ grep "CREATE INDEX" supabase/migrations/001_create_ads_detail.sql
 
 Output:
 ```text
-CREATE INDEX IF NOT EXISTS idx_ads_detail_library_id ON ads_detail(library_id);
 CREATE INDEX IF NOT EXISTS idx_ads_detail_advertiser ON ads_detail(advertiser_name);
 CREATE INDEX IF NOT EXISTS idx_ads_detail_funnel ON ads_detail(funnel_type);
 CREATE INDEX IF NOT EXISTS idx_ads_detail_created ON ads_detail(created_at DESC);
 ```
+
+Catatan: index eksplisit untuk `library_id` memang dihapus sesuai review Claude karena `library_id TEXT UNIQUE NOT NULL` sudah otomatis membuat btree index sendiri di PostgreSQL.
 
 ## 6. PostgreSQL availability
 
@@ -82,54 +83,34 @@ Output:
 psql (PostgreSQL) 14.21 (Homebrew)
 ```
 
-## 7. Real parser validation with temporary local PostgreSQL
+## 7. Real parser validation on clean temporary database
 
 Command:
 ```bash
-env LC_ALL=C LANG=C initdb -D /private/tmp/adslab_pg_task001
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d postgres -c "CREATE DATABASE task001_revision_1600;"
 ```
 
 Output:
 ```text
-The files belonging to this database system will be owned by user "maszen".
-This user must also own the server process.
-
-The database cluster will be initialized with locale "C".
-The default database encoding has accordingly been set to "SQL_ASCII".
-The default text search configuration will be set to "english".
-
-Data page checksums are disabled.
-
-creating directory /private/tmp/adslab_pg_task001 ... ok
-creating subdirectories ... ok
-selecting dynamic shared memory implementation ... posix
-selecting default max_connections ... 100
-selecting default shared_buffers ... 128MB
-selecting default time zone ... Asia/Jakarta
-creating configuration files ... ok
-running bootstrap script ... ok
-performing post-bootstrap initialization ... ok
-syncing data to disk ... initdb: warning: enabling "trust" authentication for local connections
-You can change this by editing pg_hba.conf or using the option -A, or
---auth-local and --auth-host, the next time you run initdb.
-ok
+CREATE DATABASE
 ```
 
 Command:
 ```bash
-mkdir -p /private/tmp/adslab_pg_socket
-pg_ctl -D /private/tmp/adslab_pg_task001 -l /private/tmp/adslab_pg_task001.log -o "-k /private/tmp/adslab_pg_socket" start
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d postgres -c "SELECT datname FROM pg_database WHERE datname = 'task001_revision_1600';"
 ```
 
 Output:
 ```text
-waiting for server to start.... done
-server started
+        datname        
+-----------------------
+ task001_revision_1600
+(1 row)
 ```
 
 Command:
 ```bash
-psql --no-psqlrc -h /private/tmp/adslab_pg_socket -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/001_create_ads_detail.sql
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d task001_revision_1600 -v ON_ERROR_STOP=1 -f supabase/migrations/001_create_ads_detail.sql
 ```
 
 Output:
@@ -139,12 +120,11 @@ CREATE TABLE
 CREATE INDEX
 CREATE INDEX
 CREATE INDEX
-CREATE INDEX
 ```
 
 Command:
 ```bash
-psql --no-psqlrc -h /private/tmp/adslab_pg_socket -d postgres -c "\d ads_detail"
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d task001_revision_1600 -c "\d ads_detail"
 ```
 
 Output:
@@ -172,7 +152,6 @@ Indexes:
     "idx_ads_detail_advertiser" btree (advertiser_name)
     "idx_ads_detail_created" btree (created_at DESC)
     "idx_ads_detail_funnel" btree (funnel_type)
-    "idx_ads_detail_library_id" btree (library_id)
 Check constraints:
     "ads_detail_campaign_stage_check" CHECK (campaign_stage = ANY (ARRAY['TOFU'::text, 'MOFU'::text, 'BOFU'::text]))
     "ads_detail_creative_type_check" CHECK (creative_type = ANY (ARRAY['image'::text, 'video'::text, 'carousel'::text]))
@@ -184,34 +163,26 @@ Check constraints:
 
 Command:
 ```bash
-psql --no-psqlrc -h /private/tmp/adslab_pg_socket -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/001_create_ads_detail.sql
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d task001_revision_1600 -v ON_ERROR_STOP=1 -f supabase/migrations/001_create_ads_detail.sql
 ```
 
 Output:
 ```text
 psql:supabase/migrations/001_create_ads_detail.sql:1: NOTICE:  extension "uuid-ossp" already exists, skipping
 CREATE EXTENSION
-CREATE TABLE
 psql:supabase/migrations/001_create_ads_detail.sql:18: NOTICE:  relation "ads_detail" already exists, skipping
-psql:supabase/migrations/001_create_ads_detail.sql:20: NOTICE:  relation "idx_ads_detail_library_id" already exists, skipping
+CREATE TABLE
 CREATE INDEX
+psql:supabase/migrations/001_create_ads_detail.sql:20: NOTICE:  relation "idx_ads_detail_advertiser" already exists, skipping
 CREATE INDEX
-psql:supabase/migrations/001_create_ads_detail.sql:21: NOTICE:  relation "idx_ads_detail_advertiser" already exists, skipping
+psql:supabase/migrations/001_create_ads_detail.sql:21: NOTICE:  relation "idx_ads_detail_funnel" already exists, skipping
 CREATE INDEX
-psql:supabase/migrations/001_create_ads_detail.sql:22: NOTICE:  relation "idx_ads_detail_funnel" already exists, skipping
-CREATE INDEX
-psql:supabase/migrations/001_create_ads_detail.sql:23: NOTICE:  relation "idx_ads_detail_created" already exists, skipping
+psql:supabase/migrations/001_create_ads_detail.sql:22: NOTICE:  relation "idx_ads_detail_created" already exists, skipping
 ```
 
-## 9. Temporary database shutdown
+## 9. Verification note
 
-Command:
-```bash
-pg_ctl -D /private/tmp/adslab_pg_task001 stop
-```
-
-Output:
+Catatan:
 ```text
-waiting for server to shut down.... done
-server stopped
+Verifikasi revisi dijalankan pada database bersih `task001_revision_1600` di cluster PostgreSQL lokal sementara yang sudah aktif pada socket `/private/tmp/adslab_pg_socket_rev`. Pendekatan ini dipakai karena bootstrap cluster baru dari sandbox tidak konsisten, tetapi eksekusi migration dan inspeksi schema tetap berhasil pada database kosong.
 ```
