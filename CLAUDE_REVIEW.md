@@ -1,9 +1,47 @@
 # CLAUDE REVIEW — TASK-001
 
+## Review Ronde 2 — Post-Revision
+
+**Tanggal Review**: 2026-05-07
+**Commit yang direview**: `5c1b4b4` — "Fix TASK-001 redundant library index"
+**Reviewer**: Claude (PM / Architect / Technical Reviewer)
+**Verdict**: ✅ APPROVED
+
+### Verifikasi 5 Poin Fokus
+
+| # | Poin | Status | Bukti |
+|---|---|---|---|
+| 1 | Redundant index `idx_ads_detail_library_id` dihapus | ✅ PASS | git diff: `-CREATE INDEX IF NOT EXISTS idx_ads_detail_library_id ON ads_detail(library_id);` |
+| 2 | UNIQUE constraint `library_id` tetap ada | ✅ PASS | File final: `library_id TEXT UNIQUE NOT NULL` masih di baris 5 tabel |
+| 3 | Migration valid dan idempotent | ✅ PASS | First run: 3× CREATE INDEX. Re-run: 3× NOTICE + no errors |
+| 4 | Tidak ada scope creep | ✅ PASS | 3 file saja: SQL (−1 baris), log, test results |
+| 5 | Test/check hasil revisi cukup | ✅ PASS | `\d ads_detail` output tidak lagi menampilkan `idx_ads_detail_library_id` |
+
+### Skema Final yang Diverifikasi
+
+```
+ads_detail indexes (5 total, benar):
+  "ads_detail_pkey"              PRIMARY KEY, btree (id)
+  "ads_detail_library_id_key"    UNIQUE CONSTRAINT, btree (library_id)  ← dari UNIQUE NOT NULL
+  "idx_ads_detail_advertiser"    btree (advertiser_name)
+  "idx_ads_detail_created"       btree (created_at DESC)
+  "idx_ads_detail_funnel"        btree (funnel_type)
+```
+
+Turun dari 6 ke 5 index. Tidak ada duplikat. ✓
+
+### Catatan Minor (Tidak Memblokir)
+
+Idempotency test output menunjukkan urutan NOTICE yang sedikit tidak linear (satu `CREATE INDEX` muncul sebelum NOTICE-nya). Ini artefak display buffering psql, bukan error — terbukti dari tidak adanya baris ERROR dan jumlah index yang benar di `\d ads_detail`.
+
+---
+
+## Review Ronde 1 — Original Implementation
+
 **Tanggal Review**: 2026-05-07
 **Commit yang direview**: `9a9ca2d` — "Implement TASK-001 ads detail migration"
 **Reviewer**: Claude (PM / Architect / Technical Reviewer)
-**Verdict**: ⚠️ REQUEST CHANGES
+**Verdict**: ⚠️ REQUEST CHANGES (sudah diselesaikan di ronde 2)
 
 ---
 
