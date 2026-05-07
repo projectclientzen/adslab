@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ADS LAB Control Room</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Syne:wght@500;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-left"></div>
+    <div class="ambient ambient-right"></div>
+
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand-block">
+          <p class="eyebrow">Meta Ad Intelligence Platform</p>
+          <h1>ADS LAB</h1>
+          <p class="brand-copy">
+            Prototype front end berdasarkan PRD v2.2 untuk command center
+            performance ads dan riset kompetitor.
+          </p>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-link active" data-section="overview">Overview</button>
+          <button class="nav-link" data-section="dashboard">Dashboard Ads</button>
+          <button class="nav-link" data-section="intelligence">
+            Ad Intelligence
+          </button>
+          <button class="nav-link" data-section="analysis">
+            Competitor Analysis
+          </button>
+        </nav>
+
+        <div class="sidebar-card">
+          <p class="card-label">PRD Signals</p>
+          <ul class="signal-list">
+            <li>3 brand dengan KPI berbeda</li>
+            <li>Alert real-time + diagnosis rule-based</li>
+            <li>Funnel classifier aktif di Phase 2B</li>
+            <li>Stage classifier ditahan sampai Phase 5</li>
+          </ul>
+        </div>
+
+        <div class="sidebar-card muted">
+          <p class="card-label">Build Scope</p>
+          <p>
+            UI ini memprioritaskan dashboard web app dan performance monitor.
+            Chrome Extension tidak divisualkan sebagai layar terpisah.
+          </p>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Internal Use</p>
+            <h2>Control Room / Phase 3A MVP</h2>
+          </div>
+
+          <div class="topbar-actions">
+            <div class="status-pill">
+              <span class="status-dot"></span>
+              Supabase fallback ready
+            </div>
+            <button class="ghost-button">Export Snapshot</button>
+          </div>
+        </header>
+
+        <section class="page-section active" id="overview">
+          <div class="hero-panel">
+            <div class="hero-copy">
+              <p class="eyebrow">Product Synthesis</p>
+              <h3>
+                Satu dashboard untuk membaca performa ads internal sekaligus pola
+                serangan kompetitor.
+              </h3>
+              <p>
+                PRD menekankan loop keputusan yang cepat: alert, diagnosis,
+                suggest action, lalu referensi creative dari kompetitor dan winning
+                ads dalam satu ruang kerja.
+              </p>
+            </div>
+
+            <div class="hero-metrics" id="hero-metrics"></div>
+          </div>
+
+          <div class="overview-grid">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="card-label">Immediate Product Reading</p>
+                  <h4>Hal yang paling menentukan desain UI</h4>
+                </div>
+              </div>
+              <div class="reading-list" id="reading-list"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="card-label">Recent Extractions</p>
+                  <h4>Feed kompetitor terbaru</h4>
+                </div>
+                <span class="badge neutral">Updated 18m ago</span>
+              </div>
+              <div class="feed-list" id="recent-feed"></div>
+            </article>
+          </div>
+
+          <div class="overview-grid wide">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="card-label">Watchlist Priority</p>
+                  <h4>Domain yang layak dipantau terus</h4>
+                </div>
+              </div>
+              <div class="watchlist-grid" id="watchlist-grid"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="page-section" id="dashboard">
+          <div class="section-toolbar">
+            <div>
+              <p class="eyebrow">Dashboard Ads</p>
+              <h3>Performance monitor per brand</h3>
+            </div>
+            <div class="toolbar-row">
+              <div class="segmented" id="brand-switcher"></div>
+              <div class="segmented" id="range-switcher"></div>
+            </div>
+          </div>
+
+          <div class="kpi-grid" id="kpi-grid"></div>
+
+          <div class="dashboard-grid">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="card-label">Realtime Alerts</p>
+                  <h4>Diagnosis + suggest action</h4>
+                </div>
+                <span class="badge warning">Rule-based engine</span>
+              </div>
+              <div class="alert-list" id="alert-list"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="card-label">Secondary Metrics</p>
+                  <h4>Pulse keseluruhan brand</h4>
+                </div>
+              </div>
+              <div class="secondary-grid" id="secondary-grid"></div>
+              <div class="fallback-banner" id="fallback-banner"></div>
+            </article>
+          </div>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="card-label">Campaign Breakdown</p>
+                <h4>Campaign / Adset / Ad dengan target-aware status</h4>
+              </div>
+              <span class="badge success">Admin KPI config ready</span>
+            </div>
+            <div class="campaign-table" id="campaign-table"></div>
+          </article>
+        </section>
+
+        <section class="page-section" id="intelligence">
+          <div class="section-toolbar intelligence-toolbar">
+            <div>
+              <p class="eyebrow">Web App / ADS LAB</p>
+              <h3>Ad intelligence competitor</h3>
+            </div>
+            <div class="toolbar-stack">
+              <div class="segmented" id="funnel-filter"></div>
+              <div class="hold-note">
+                Stage classifier TOFU/MOFU/BOFU ditahan sampai Phase 5 agar UI
+                tidak mengunci ekspektasi fitur terlalu cepat.
+              </div>
+            </div>
+          </div>
+
+          <div class="intelligence-summary" id="intelligence-summary"></div>
+          <div class="cards-grid" id="intelligence-cards"></div>
+        </section>
+
+        <section class="page-section" id="analysis">
+          <div class="section-toolbar">
+            <div>
+              <p class="eyebrow">Competitor Analysis</p>
+              <h3>Volume iklan dan distribusi funnel per domain</h3>
+            </div>
+          </div>
+
+          <div class="analysis-grid">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="card-label">Volume Leaderboard</p>
+                  <h4>Domain paling agresif</h4>
+                </div>
+              </div>
+              <div class="bar-list" id="domain-bars"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="card-label">Funnel Split</p>
+                  <h4>Distribusi tipe funnel</h4>
+                </div>
+              </div>
+              <div class="donut-wrap">
+                <div class="donut-chart" id="donut-chart"></div>
+                <div class="donut-legend" id="donut-legend"></div>
+              </div>
+            </article>
+          </div>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="card-label">Strategic Notes</p>
+                <h4>Apa yang sebaiknya dilakukan tim dari data ini</h4>
+              </div>
+            </div>
+            <div class="strategy-grid" id="strategy-grid"></div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
