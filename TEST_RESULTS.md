@@ -933,3 +933,121 @@ Catatan:
 ```text
 TASK-006 membutuhkan verifikasi manual terhadap database Supabase nyata dan run scraping berulang pada domain yang sama. Dari terminal ini saya hanya bisa memverifikasi bahwa path upsert ignore-duplicates, counter storage, dan popup counter sudah terpasang dengan benar.
 ```
+
+# TEST_RESULTS — TASK-007
+
+Tanggal: 2026-05-08
+
+## 1. Timer-based scroll check
+
+Command:
+```bash
+grep -E "setInterval|setTimeout" extension/content.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: command exit code `1` karena tidak ada match, dan itu sesuai expected result task.
+
+## 2. IntersectionObserver presence check
+
+Command:
+```bash
+grep "IntersectionObserver" extension/content.js
+```
+
+Output:
+```text
+  createIntersectionObserver();
+function createIntersectionObserver() {
+  scrollState.intersectionObserver = new IntersectionObserver(
+```
+
+## 3. Scroll progress state wiring check
+
+Command:
+```bash
+grep -n "adsLabScrollState\|Scrolling\|stagnantScrolls" extension/content.js extension/popup.js extension/popup.html
+```
+
+Output:
+```text
+extension/content.js:10:const AUTO_SCROLL_STATE_STORAGE_KEY = "adsLabScrollState";
+extension/content.js:22:  stagnantScrolls: 0,
+extension/content.js:219:  scrollState.stagnantScrolls = 0;
+extension/content.js:225:  updateScrollProgress("Scrolling", false);
+extension/content.js:263:  updateScrollProgress(scrollState.completed ? "Selesai" : "Scrolling", scrollState.completed);
+extension/content.js:278:    scrollState.stagnantScrolls = 0;
+extension/content.js:281:    scrollState.stagnantScrolls += 1;
+extension/content.js:284:  if (scrollState.stagnantScrolls >= MAX_STAGNANT_SCROLLS) {
+extension/content.js:295:    updateScrollProgress("Scrolling", false);
+extension/content.js:443:    stagnantScrolls: scrollState.stagnantScrolls,
+extension/popup.js:2:const AUTO_SCROLL_STATE_STORAGE_KEY = "adsLabScrollState";
+extension/popup.js:58:    counterElement.textContent = "Scrolling... 0/0 iklan";
+extension/popup.js:65:    (stats.statusLabel || "Scrolling") +
+extension/popup.js:74:    (stats.stagnantScrolls || 0) +
+extension/popup.html:43:    <p class="counter" id="scroll-counter">Scrolling... 0/0 iklan</p>
+```
+
+## 4. Content script syntax check
+
+Command:
+```bash
+node --check extension/content.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax file valid.
+
+## 5. Popup script syntax check
+
+Command:
+```bash
+node --check extension/popup.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax file valid.
+
+## 6. Working tree summary after TASK-007
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+ M extension/content.js
+ M extension/popup.html
+ M extension/popup.js
+```
+
+## 7. Manual browser verification note
+
+Command:
+```text
+Test pada halaman 300+ iklan di Meta Ads Library dan amati popup:
+Scrolling... X/estimasi iklan
+```
+
+Output:
+```text
+Belum dijalankan di environment terminal ini.
+```
+
+Catatan:
+```text
+TASK-007 membutuhkan verifikasi manual di browser extension untuk memastikan observer tidak berhenti di tengah pada halaman dengan 300+ iklan. Dari terminal ini saya hanya bisa memverifikasi tidak ada timer-based scroll, observer wiring, progress state, dan validitas syntax.
+```

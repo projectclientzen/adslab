@@ -98,3 +98,19 @@
 - Tidak ada perubahan scope ke task lain; fokus hanya pada save dedup dan counter popup.
 - Validasi dilakukan dengan grep upsert/dedup, pengecekan wiring popup, dan `node --check` untuk file JS yang berubah; detail output disimpan di `TEST_RESULTS.md`.
 - Verifikasi manual terhadap Supabase SQL Editor dan scrape domain yang sama 2x masih perlu dijalankan di browser/instance Supabase nyata.
+
+## 2026-05-08 — TASK-007
+
+- Scope yang dikerjakan hanya `TASK-007`.
+- `PRD.md` tidak ada di repo, jadi referensi implementasi mengikuti `TASKS.md`, `ACCEPTANCE_CRITERIA.md`, dan bagian auto-scroll extension di `ADS_LAB_PRD_v2 2.md`.
+- [extension/content.js](/Volumes/Daily Project/adslab/extension/content.js) direfaktor untuk menambahkan auto-scroll berbasis `IntersectionObserver`:
+  - bootstrap mencari container Ads Library dan memasang sentinel `#ads-lab-scroll-sentinel`
+  - observer memicu scroll `window.scrollBy(0, 800)` saat sentinel masuk viewport
+  - visible ad count dihitung dari link Ads Library yang memiliki `id` / `ad_archive_id`
+  - jika tidak ada kenaikan jumlah iklan setelah 3 intersection berturut-turut, observer berhenti otomatis sebagai end-of-list detection
+  - setiap langkah menulis progress state ke `chrome.storage.session` dengan key `adsLabScrollState`
+  - content script juga mem-publish event `adslab:scrape-requested` agar pipeline scrape bisa diikat ke ads yang baru terlihat
+- [extension/popup.html](/Volumes/Daily Project/adslab/extension/popup.html) dan [extension/popup.js](/Volumes/Daily Project/adslab/extension/popup.js) diperbarui untuk menampilkan progress indicator `Scrolling... X/estimasi iklan` dan status observer.
+- Tidak ada `setInterval` atau `setTimeout` yang dipakai untuk trigger scroll.
+- Validasi dilakukan dengan grep no-timer check, grep `IntersectionObserver`, grep progress state, dan `node --check`; detail output disimpan di `TEST_RESULTS.md`.
+- Manual test pada halaman 300+ iklan masih perlu dilakukan langsung di browser extension karena tidak bisa disimulasikan dari terminal ini.
