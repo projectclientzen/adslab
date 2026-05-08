@@ -44,3 +44,16 @@
   - update [.gitignore](/Volumes/Daily Project/adslab/.gitignore) untuk memastikan `.env` tidak ter-commit
 - Folder `prototype_ui/` tidak diubah, sesuai instruksi task.
 - Validasi dilakukan dengan check command dari `TASKS.md`; detail output disimpan di `TEST_RESULTS.md`.
+
+## 2026-05-08 — TASK-004
+
+- Scope yang dikerjakan hanya `TASK-004`.
+- `PRD.md` tidak ada di repo, jadi referensi implementasi mengikuti `TASKS.md`, `ACCEPTANCE_CRITERIA.md`, dan konteks dashboard/web app di `ADS_LAB_PRD_v2 2.md`.
+- Menambahkan file [prototype_ui/supabaseClient.js](/Volumes/Daily Project/adslab/prototype_ui/supabaseClient.js) sebagai modul reusable berbasis Supabase CDN dengan:
+  - inisialisasi client dari `window.SUPABASE_URL` dan `window.SUPABASE_ANON_KEY`
+  - export client ke global `window.supabase`
+  - helper global `fetchLatestSnapshot`, `fetchAdsIntelligence`, dan `saveKpiTarget`
+  - fallback mock + warning console jelas saat config belum tersedia atau request error
+- Mengupdate [prototype_ui/index.html](/Volumes/Daily Project/adslab/prototype_ui/index.html) untuk memuat script CDN `@supabase/supabase-js@2` dan `supabaseClient.js` sebelum `app.js`.
+- Tidak ada kredensial hardcoded yang ditambahkan ke file.
+- Validasi dilakukan dengan grep checks dari task, verifikasi inject script di HTML, dan `node --check`; detail output disimpan di `TEST_RESULTS.md`.

@@ -494,3 +494,92 @@ Catatan:
 ```text
 TASK-003 hanya membutuhkan verifikasi struktur file dan konfigurasi dasar. Tidak ada lint/build/runtime test tambahan yang relevan karena task ini tidak menambah kode aplikasi atau migration baru.
 ```
+
+# TEST_RESULTS — TASK-004
+
+Tanggal: 2026-05-08
+
+## 1. Hardcoded credential check
+
+Command:
+```bash
+grep -E "eyJ|https://[a-z].*\.supabase\.co" prototype_ui/supabaseClient.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: command exit code `1` karena tidak ada match, dan itu sesuai expected result task.
+
+## 2. Required helper function presence check
+
+Command:
+```bash
+grep -E "fetchLatestSnapshot|fetchAdsIntelligence|saveKpiTarget" prototype_ui/supabaseClient.js | wc -l
+```
+
+Output:
+```text
+      15
+```
+
+## 3. Fallback mock presence check
+
+Command:
+```bash
+grep "mock\|fallback\|SUPABASE_URL" prototype_ui/supabaseClient.js | wc -l
+```
+
+Output:
+```text
+      24
+```
+
+## 4. JavaScript syntax check
+
+Command:
+```bash
+node --check prototype_ui/supabaseClient.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, menandakan syntax file valid.
+
+## 5. HTML script injection check
+
+Command:
+```bash
+grep -n "supabase-js@2\|supabaseClient.js" prototype_ui/index.html
+```
+
+Output:
+```text
+245:    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+246:    <script src="./supabaseClient.js"></script>
+```
+
+## 6. Working tree summary after TASK-004
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+ M prototype_ui/index.html
+?? prototype_ui/supabaseClient.js
+```
+
+## 7. Verification note
+
+Catatan:
+```text
+TASK-004 diverifikasi dengan fokus pada keamanan konfigurasi, keberadaan helper, fallback behavior marker, integrasi HTML, dan validitas syntax. Belum ada runtime call ke Supabase karena task ini memang menyiapkan client module dan graceful fallback terlebih dulu.
+```
