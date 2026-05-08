@@ -649,3 +649,152 @@ Catatan:
 ```text
 Status working tree saat pass revisi hanya menunjukkan perubahan lokal pada CLAUDE_REVIEW.md. Tidak ada perubahan tambahan pada file implementasi TASK-004 dari pass revisi ini.
 ```
+
+# TEST_RESULTS — TASK-005
+
+Tanggal: 2026-05-08
+
+## 1. Manifest permission check
+
+Command:
+```bash
+grep -E "webRequest|debugger|declarativeNetRequest" extension/manifest.json
+```
+
+Output:
+```text
+  "permissions": ["storage", "webRequest"],
+```
+
+## 2. Storage and mapping implementation check
+
+Command:
+```bash
+grep -R "chrome.storage.session\|library_id\|destination_url" extension
+```
+
+Output:
+```text
+extension/background.js:    "library_id",
+extension/background.js:  const candidateKeys = ["destination_url", "destination_urls", "link_url", "link_urls"];
+extension/background.js:  await chrome.storage.session.set(storagePayload);
+extension/content.js:  return chrome.storage.session.get(libraryId).then(function resolveStoredUrl(data) {
+extension/content.js:  if (!record || !record.library_id) {
+extension/content.js:  const destinationUrl = await getDestinationUrlForLibraryId(record.library_id);
+extension/content.js:    destination_url: destinationUrl,
+```
+
+## 3. Background syntax check
+
+Command:
+```bash
+node --check extension/background.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax file valid.
+
+## 4. Content script syntax check
+
+Command:
+```bash
+node --check extension/content.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax file valid.
+
+## 5. Injected fetch syntax check
+
+Command:
+```bash
+node --check extension/injected-fetch.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax file valid.
+
+## 6. Extension file presence check
+
+Command:
+```bash
+ls -la extension
+```
+
+Output:
+```text
+total 56
+drwxr-xr-x   8 maszen  admin   256 May  8 12:53 .
+drwxr-xr-x  20 maszen  admin   640 May  8 12:26 ..
+-rw-r--r--   1 maszen  admin     1 May  8 12:11 .gitkeep
+-rw-r--r--   1 maszen  admin   271 May  8 12:11 README.md
+-rw-r--r--   1 maszen  admin  5041 May  8 12:53 background.js
+-rw-r--r--   1 maszen  admin  3192 May  8 12:53 content.js
+-rw-r--r--   1 maszen  admin  1293 May  8 12:53 injected-fetch.js
+-rw-r--r--   1 maszen  admin   676 May  8 12:53 manifest.json
+```
+
+## 7. Working tree summary after TASK-005
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+?? extension/background.js
+?? extension/content.js
+?? extension/injected-fetch.js
+?? extension/manifest.json
+```
+
+## 8. Manual browser verification note
+
+Command:
+```text
+Load extension di Chrome -> buka Meta Ads Library -> buka DevTools Extension
+chrome.storage.session.get(null, (data) => console.log(Object.keys(data).length))
+```
+
+Output:
+```text
+Belum dijalankan di environment terminal ini.
+```
+
+Catatan:
+```text
+TASK-005 membutuhkan verifikasi manual di Chrome Extension service worker untuk membuktikan jumlah key storage mendekati jumlah iklan yang di-scrape. Dari terminal ini saya hanya bisa memverifikasi manifest, wiring, penggunaan chrome.storage.session, dan validitas syntax.
+```
+
+## 9. GraphQL parsing robustness check
+
+Command:
+```bash
+rg -n "sanitizedBody|for\\s*\\(|while\\s*\\(|/api/graphql/" extension/background.js extension/injected-fetch.js
+```
+
+Output:
+```text
+extension/background.js:1:const GRAPHQL_URL_FILTER = { urls: ["*://www.facebook.com/api/graphql/*"] };
+extension/background.js:65:  const sanitizedBody = rawBody.replace(/^for\s*\(;;\);\s*/, "").replace(/^while\s*\(1\);\s*/, "");
+extension/background.js:68:    return JSON.parse(sanitizedBody);
+extension/injected-fetch.js:32:        requestUrl.includes("/api/graphql/")
+```
+
+Catatan:
+```text
+Implementasi final mengakomodasi variasi request URL GraphQL yang relatif pada halaman Meta dan membersihkan prefix response Facebook seperti `for (;;);` atau `while(1);` sebelum `JSON.parse`.
+```

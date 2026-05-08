@@ -61,3 +61,24 @@
   - `CLAUDE_REVIEW.md` memberi verdict `APPROVED` untuk `TASK-004`, jadi tidak ada perubahan kode fungsional tambahan yang diperlukan
   - check command `TASK-004` dijalankan ulang untuk memastikan hasil tetap konsisten setelah review
   - pass revisi ini hanya memperbarui dokumentasi verifikasi di `TEST_RESULTS.md` dan catatan implementasi ini
+
+## 2026-05-08 — TASK-005
+
+- Scope yang dikerjakan hanya `TASK-005`.
+- `PRD.md` tidak ada di repo, jadi referensi implementasi mengikuti `TASKS.md`, `ACCEPTANCE_CRITERIA.md`, dan bagian Chrome Extension di `ADS_LAB_PRD_v2 2.md`.
+- Menambahkan fondasi intercept GraphQL untuk Meta Ads Library di folder `extension/`:
+  - [extension/manifest.json](/Volumes/Daily Project/adslab/extension/manifest.json) dengan `webRequest`, host permission Facebook, content script, background service worker, dan `web_accessible_resources`
+  - [extension/background.js](/Volumes/Daily Project/adslab/extension/background.js) untuk:
+    - mendeteksi request GraphQL POST via `chrome.webRequest.onBeforeRequest`
+    - memproses response JSON yang dikirim dari halaman
+    - extract `library_id` dan `destination_url` / `link_url`
+    - menyimpan mapping `library_id -> destination_url` ke `chrome.storage.session`
+  - [extension/content.js](/Volumes/Daily Project/adslab/extension/content.js) untuk:
+    - menginjeksi fetch interceptor ke halaman Ads Library
+    - meneruskan response GraphQL ke background
+    - membaca `chrome.storage.session` dan attach `destination_url` ke record iklan berdasarkan `library_id`
+  - [extension/injected-fetch.js](/Volumes/Daily Project/adslab/extension/injected-fetch.js) untuk override `window.fetch` pada halaman Meta dan menangkap response GraphQL POST sebelum diteruskan ke extension
+- Tidak ada full response yang disimpan ke storage; yang disimpan hanya mapping `library_id` ke URL tujuan.
+- Parser background membersihkan prefix response seperti `for (;;);` / `while(1);`, dan interceptor halaman menerima URL GraphQL relatif seperti `/api/graphql/` agar flow Meta lebih realistis.
+- Validasi dilakukan dengan grep permissions, grep storage/mapping, dan `node --check` untuk semua file JS extension; detail output disimpan di `TEST_RESULTS.md`.
+- Manual test di Chrome Extension belum dijalankan dari environment terminal ini, jadi target scrape 10 iklan masih perlu verifikasi browser langsung.
