@@ -1,3 +1,127 @@
+# CLAUDE REVIEW — TASK-008
+
+**Tanggal Review**: 2026-05-08
+**Commit yang direview**: `bf15675` — "Implement TASK-008 Netlify functions setup"
+**Reviewer**: Claude (PM / Architect / Technical Reviewer)
+**Verdict**: ❌ REQUEST CHANGES
+
+---
+
+## Checklist Review
+
+| # | Cek | Status | Catatan |
+|---|---|---|---|
+| 1 | Sesuai PRD? | ⚠️ PARTIAL | Struktur fetch sesuai PRD (Meta API v20.0, fields, level=ad, date_preset=last_30d) — tapi tidak ada pagination, sehingga data yang diambil tidak lengkap |
+| 2 | Sesuai TASK-008? | ⚠️ PARTIAL | 4 dari 5 DoD pass; DoD "data ter-transform sebelum upsert" pass — tapi upsert selalu gagal (tidak ada UNIQUE constraint di migration), sehingga data historis terhapus setiap run |
+| 3 | Ada scope creep? | ✅ PASS | `resolveTargetBrands()` (filter per brand via query param) adalah debugging helper yang wajar, bukan scope creep |
+| 4 | Perubahan file relevan? | ✅ PASS | `netlify/functions/meta-fetch.js` + `netlify.toml` sesuai; chmod `scripts/ai-after-codex.sh` tidak ada kaitannya tapi benign |
+| 5 | Test/check cukup? | ⚠️ PARTIAL | Static checks pass; live invoke dan actual API call belum bisa dijalankan (CLI tidak terinstall) — wajar untuk server-side function |
+| 6 | Risiko security? | ⚠️ NOTE | `SUPABASE_SERVICE_ROLE_KEY \|\| SUPABASE_ANON_KEY`: jika SERVICE_ROLE_KEY di-set, RLS di-bypass sepenuhnya. Belum ada RLS di phase ini jadi belum kritis, tapi perlu didokumentasikan di `.env.example` |
+| 7 | Risiko maintainability? | ✅ PASS | Kode bersih — `toNumber`, `toInteger`, `sumActionValues`, `nullIfEmpty` terpisah dengan baik |
+| 8 | Risiko data integrity? | ❌ FAIL | (1) Tidak ada pagination — hanya ~25 baris per brand yang ter-fetch dari Meta API; (2) `replaceSnapshotsForBrand` DELETE seluruh data brand tanpa transaction — jika INSERT gagal, semua snapshot historis brand hilang permanen |
+| 9 | Risiko UX/performance? | ✅ PASS | Error isolation per brand berfungsi; return summary per brand ✅ |
+
+---
+
+## Verifikasi Definition of Done
+
+| DoD Item | Status | Bukti |
+|---|---|---|
+| File `netlify/functions/meta-fetch.js` ada | ✅ | File ada, `exports.handler` valid |
+| Token per brand dari env vars | ✅ | `process.env["META_ACCESS_TOKEN_" + brand.toUpperCase()]` |
+| Data ter-transform ke schema `campaign_snapshots` | ✅ | `transformInsightsRows()` menghasilkan semua field schema |
+| Error satu brand tidak stop brand lain | ✅ | try/catch per brand dalam loop, `results.push` selalu dipanggil |
+| Return `fetched_at` | ✅ | Ada di setiap brand result dan top-level response |
+
+---
+
+## Instruksi Revisi untuk Codex
+
+### Masalah 1 — Tidak ada pagination (BLOCKING)
+
+**Masalah**: `fetchInsightsForBrand()` hanya membaca `json.data` dari respons pertama. Meta API mengembalikan hasil terpaginasi — default page size adalah ~25 item. Pada 30 hari dengan level=ad, sebuah brand bisa punya 100–500 baris. Tanpa pagination, hanya ~25 baris yang disimpan.
+
+**File terkait**: `netlify/functions/meta-fetch.js`
+
+**Perubahan yang diminta**: Ubah `fetchInsightsForBrand()` untuk mengikuti `paging.next` sampai tidak ada lagi halaman:
+
+```javascript
+async function fetchInsightsForBrand(brand) {
+  // ... validasi env vars, build endpoint (sama seperti sekarang) ...
+  
+  const allRows = [];
+  let nextUrl = endpoint;
+
+  while (nextUrl) {
+    const response = await fetch(nextUrl);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error("Meta API gagal untuk " + brand + ": " + response.status + " " + errorText);
+    }
+    const json = await response.json();
+    if (Array.isArray(json.data)) {
+      allRows.push(...json.data);
+    }
+    nextUrl = (json.paging && json.paging.next) ? json.paging.next : null;
+  }
+
+  return allRows;
+}
+```
+
+**Check command yang harus dijalankan ulang**:
+```bash
+grep -n "paging\|next\|allRows\|while" netlify/functions/meta-fetch.js
+# Expected: ada loop yang mengikuti paging.next
+
+node --check netlify/functions/meta-fetch.js
+# Expected: no output (syntax valid)
+```
+
+---
+
+### Masalah 2 — DELETE+INSERT tanpa constraint dan tanpa transaction (BLOCKING)
+
+**Masalah**: Tabel `campaign_snapshots` tidak punya UNIQUE constraint pada kolom conflict (`brand, campaign_id, adset_id, ad_id, level, date_start, date_stop`). Akibatnya upsert PostgREST selalu gagal, dan fungsi selalu jatuh ke `replaceSnapshotsForBrand()` yang melakukan `DELETE WHERE brand=eq.{brand}` lalu INSERT. Karena tidak ada transaction, jika INSERT gagal di tengah, **semua snapshot historis brand tersebut terhapus permanen**. Selain itu, pola DELETE+INSERT juga menghapus snapshot dari tanggal-tanggal sebelumnya yang tidak ada di run ini.
+
+**File terkait**:
+- `supabase/migrations/003_add_snapshot_unique.sql` ← file baru
+- `netlify/functions/meta-fetch.js` ← hapus atau batasi fallback berbahaya
+
+**Perubahan yang diminta**:
+
+**Step 1** — Buat migration baru `supabase/migrations/003_add_snapshot_unique.sql`:
+```sql
+ALTER TABLE campaign_snapshots
+  ADD CONSTRAINT uq_snapshot_identity
+  UNIQUE (brand, campaign_id, adset_id, ad_id, level, date_start, date_stop);
+```
+Catatan: `adset_id` dan `ad_id` bisa NULL (level=campaign tidak punya ad_id). Gunakan NULLS NOT DISTINCT jika PostgreSQL ≥ 15, atau buat kolom surrogate non-null sebelum constraint. Alternatif yang lebih aman untuk PostgreSQL < 15: ganti NULL dengan string kosong `''` di transform sebelum insert.
+
+**Step 2** — Di `meta-fetch.js`, ubah `upsertSnapshotsForBrand` untuk menggunakan `resolution=merge-duplicates` (yang sudah ada) dan **hapus `replaceSnapshotsForBrand` fallback** setelah constraint ada. Jika ingin tetap ada fallback, scope DELETE harus lebih sempit — hanya hapus rows dengan `(brand, date_start, date_stop)` yang sama, bukan seluruh brand:
+
+```javascript
+// Ganti DELETE WHERE brand=eq.{brand}
+// menjadi DELETE WHERE brand=eq.{brand}&date_start=eq.{minDate}&date_stop=eq.{maxDate}
+```
+
+**Check command yang harus dijalankan ulang**:
+```bash
+ls supabase/migrations/003_add_snapshot_unique.sql
+# Expected: file ada
+
+grep "UNIQUE\|uq_snapshot" supabase/migrations/003_add_snapshot_unique.sql
+# Expected: ada UNIQUE constraint definition
+
+grep -n "replaceSnapshotsForBrand\|DELETE" netlify/functions/meta-fetch.js
+# Expected: fallback dihapus, atau scope DELETE dibatasi ke (brand + tanggal tertentu)
+
+node --check netlify/functions/meta-fetch.js
+# Expected: no output
+```
+
+---
+
 # CLAUDE REVIEW — TASK-007
 
 **Tanggal Review**: 2026-05-08
