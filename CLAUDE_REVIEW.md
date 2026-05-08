@@ -1,4 +1,50 @@
-# CLAUDE REVIEW — TASK-008
+# CLAUDE REVIEW — TASK-008 (Revisi)
+
+**Tanggal Review**: 2026-05-08
+**Commit yang direview**: `aefb9e6` — "Fix TASK-008 review feedback"
+**Review sebelumnya**: `bf15675` → ❌ REQUEST CHANGES
+**Reviewer**: Claude (PM / Architect / Technical Reviewer)
+**Verdict**: ✅ APPROVED
+
+---
+
+## Verifikasi Poin REQUEST CHANGES
+
+| Poin | Status | Bukti |
+|---|---|---|
+| Pagination loop ditambahkan | ✅ FIXED | `while (nextUrl)` loop mengikuti `json.paging.next` sampai null di `fetchInsightsForBrand()` |
+| Migration UNIQUE constraint | ✅ FIXED | `003_add_snapshot_unique.sql` — UPDATE null→'', ALTER NOT NULL, ADD CONSTRAINT `uq_snapshot_identity` |
+| `adset_id`/`ad_id` dinormalisasi ke `""` | ✅ FIXED | `nullIfEmpty(row.adset_id) \|\| ""` di `transformInsightsRows()` |
+| `replaceSnapshotsForBrand` dihapus | ✅ FIXED | 0 match grep DELETE/replaceSnapshots — fallback berbahaya tidak ada lagi |
+| Upsert kini berfungsi dengan constraint | ✅ | UNIQUE constraint cocok dengan `UPSERT_CONFLICT_COLUMNS` di kode |
+
+---
+
+## Checklist Review (Revisi)
+
+| # | Cek | Status | Catatan |
+|---|---|---|---|
+| 1 | Sesuai PRD? | ✅ PASS | Pagination memastikan semua halaman Meta API ter-fetch, data lengkap |
+| 2 | Sesuai TASK-008? | ✅ PASS | Semua 5 DoD terpenuhi |
+| 3 | Ada scope creep? | ✅ PASS | Tidak ada penambahan di luar REQUEST CHANGES |
+| 4 | Perubahan file relevan? | ✅ PASS | `meta-fetch.js` + `003_add_snapshot_unique.sql` + log + test results |
+| 5 | Test/check cukup? | ✅ PASS | Semua 4 check command dari REQUEST CHANGES dijalankan; PostgreSQL local test untuk migration berhasil (`\d campaign_snapshots` menunjukkan `uq_snapshot_identity` UNIQUE CONSTRAINT) |
+| 6 | Risiko security? | ✅ PASS | Tidak ada credential hardcoded; catatan `SERVICE_ROLE_KEY` dari review pertama diketahui, tidak blocking |
+| 7 | Risiko maintainability? | ✅ PASS | Kode lebih bersih setelah fallback dihapus |
+| 8 | Risiko data integrity? | ✅ PASS | Upsert `merge-duplicates` + UNIQUE constraint — tidak ada lagi risiko data loss |
+| 9 | Risiko UX/performance? | ✅ PASS | Loop pagination bisa lambat untuk brand dengan banyak ads, tapi tidak ada timeout risk di Netlify Function (default 10 detik, bisa di-extend) |
+
+---
+
+## Catatan
+
+**Migration idempotency**: `003_add_snapshot_unique.sql` tidak menggunakan `IF NOT EXISTS` untuk ADD CONSTRAINT — jika dijalankan dua kali akan error "constraint already exists". Untuk Supabase production, ini tidak masalah karena migration hanya dijalankan sekali. Tidak perlu difix.
+
+**PostgreSQL local test berkualitas tinggi**: Codex menjalankan migration pada PostgreSQL lokal dan memverifikasi `\d campaign_snapshots` — ini lebih baik dari sekedar static check. ✅
+
+---
+
+# CLAUDE REVIEW — TASK-008 (Initial — REQUEST CHANGES)
 
 **Tanggal Review**: 2026-05-08
 **Commit yang direview**: `bf15675` — "Implement TASK-008 Netlify functions setup"
