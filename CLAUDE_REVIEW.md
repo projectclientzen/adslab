@@ -1,3 +1,62 @@
+# CLAUDE REVIEW — TASK-007
+
+**Tanggal Review**: 2026-05-08
+**Commit yang direview**: `db53625` — "Implement TASK-007 dedup save flow" *(commit message salah — isinya adalah TASK-007 IntersectionObserver)*
+**Reviewer**: Claude (PM / Architect / Technical Reviewer)
+**Verdict**: ✅ APPROVED
+
+---
+
+## Checklist Review
+
+| # | Cek | Status | Catatan |
+|---|---|---|---|
+| 1 | Sesuai PRD? | ✅ PASS | IntersectionObserver + sentinel adalah approach yang benar sesuai PRD; memenuhi AC-2A-03 (auto-scroll tidak berhenti prematur) |
+| 2 | Sesuai TASK-007? | ✅ PASS | Semua 4 DoD terpenuhi: no timers, observer ter-implementasi, end-of-list detection, progress indicator di popup |
+| 3 | Ada scope creep? | ✅ PASS | popup.html + popup.js diupdate untuk progress indicator — eksplisit diminta di TASK-007 spec ("progress indicator di extension popup") |
+| 4 | Perubahan file relevan? | ✅ PASS | content.js (core), popup.html + popup.js (progress UI), log + test results |
+| 5 | Test/check cukup? | ⚠️ PARTIAL | Static checks pass (grep no-timer, grep observer, node --check); manual test 300+ iklan belum dijalankan (noted Codex) |
+| 6 | Risiko security? | ✅ PASS | `adslab:scrape-requested` custom event hanya publish library_id array ke window; tidak ada data sensitif; sentinel adalah div kosong aria-hidden |
+| 7 | Risiko maintainability? | ⚠️ NOTE | (1) `AUTO_SCROLL_STATE_STORAGE_KEY` string terduplikasi di content.js dan popup.js — pola sama seperti TASK-006; (2) `refreshSentinelPosition()` memiliki dead branch: kedua if/else melakukan `container.appendChild(sentinel)` — berfungsi benar tapi logika if redundant |
+| 8 | Risiko data integrity? | ⚠️ NOTE | `adslab:scrape-requested` event di-dispatch tapi belum ada listener di content.js maupun background.js — auto-scroll belum ter-wiring ke pipeline scraping. Scroll berjalan tapi scraping tetap harus dipanggil manual via `window.adsLabPrepareAndSaveRecords` |
+| 9 | Risiko UX/performance? | ✅ PASS | `scrollLocked` flag mencegah re-entrant scroll; `requestAnimationFrame` untuk scroll; sentinel 1px aria-hidden pointerEvents-none — minimal DOM footprint |
+
+---
+
+## Verifikasi Definition of Done
+
+| DoD Item | Status | Bukti |
+|---|---|---|
+| Tidak ada `setInterval`/`setTimeout` di fungsi scroll | ✅ | `grep -E "setInterval\|setTimeout" extension/content.js` → 0 match |
+| IntersectionObserver ter-implementasi | ✅ | `new IntersectionObserver(...)` di `createIntersectionObserver()`, observe sentinel dengan `threshold: 0.1` |
+| Observer berhenti otomatis saat end of list | ✅ | `stagnantScrolls >= MAX_STAGNANT_SCROLLS (3)` → `stopAutoScroll("End of list")` — disconnect kedua observer |
+| Progress indicator di popup | ✅ | popup.html: `#scroll-counter`, `#scroll-meta`; popup.js: `updateScrollUi()` baca dari `chrome.storage.session` |
+
+---
+
+## Catatan Teknis
+
+**Commit message salah:**
+Commit `db53625` diberi pesan "Implement TASK-007 dedup save flow" tapi isinya adalah implementasi TASK-007 IntersectionObserver. Tidak mempengaruhi kode, tapi merusak traceability git log.
+
+**`adslab:scrape-requested` event belum ter-wiring (non-blocker):**
+`dispatchVisibleAdsSnapshot()` dispatch `adslab:scrape-requested` ke `window` setiap ada ads baru terdeteksi — ini adalah hook yang baik untuk integrasi masa depan. Namun saat ini tidak ada listener untuk event ini. Pipeline scraping (TASK-005/006) tetap dipanggil manual. Auto-scroll + auto-scrape belum fully integrated. Ini **bukan DoD failure** (DoD TASK-007 tidak mensyaratkan wiring ke pipeline), tapi harus di-address di task berikutnya atau TASK-020.
+
+**`refreshSentinelPosition()` dead branch:**
+```javascript
+if (scrollState.sentinel.parentElement !== container) {
+  container.appendChild(scrollState.sentinel);
+  return; // early return
+}
+container.appendChild(scrollState.sentinel); // kedua branch melakukan hal sama
+```
+Keduanya melakukan `container.appendChild` — efek sama. Bisa disederhanakan jadi satu baris. Fungsional benar, tidak perlu difix sekarang.
+
+**Pendekatan selector lebih robust:**
+`findAdsContainer()` menggunakan URL-based selector (`a[href*="/ads/library/?id="]`) bukan CSS class selector — lebih tahan terhadap perubahan class name Facebook. Good choice.
+
+---
+
 # CLAUDE REVIEW — TASK-006
 
 **Tanggal Review**: 2026-05-08
