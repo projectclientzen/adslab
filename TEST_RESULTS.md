@@ -583,3 +583,69 @@ Catatan:
 ```text
 TASK-004 diverifikasi dengan fokus pada keamanan konfigurasi, keberadaan helper, fallback behavior marker, integrasi HTML, dan validitas syntax. Belum ada runtime call ke Supabase karena task ini memang menyiapkan client module dan graceful fallback terlebih dulu.
 ```
+
+## 8. Claude review re-check
+
+Referensi:
+```text
+CLAUDE_REVIEW.md memberi verdict APPROVED untuk TASK-004, sehingga revisi ini berupa verifikasi ulang tanpa perubahan kode fungsional.
+```
+
+Command:
+```bash
+grep -E "eyJ|https://[a-z].*\.supabase\.co" prototype_ui/supabaseClient.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: command exit code `1` karena memang tidak ada hardcoded credential yang match.
+
+Command:
+```bash
+grep -E "fetchLatestSnapshot|fetchAdsIntelligence|saveKpiTarget" prototype_ui/supabaseClient.js | wc -l
+```
+
+Output:
+```text
+      15
+```
+
+Command:
+```bash
+grep "mock\|fallback\|SUPABASE_URL" prototype_ui/supabaseClient.js | wc -l
+```
+
+Output:
+```text
+      24
+```
+
+Command:
+```bash
+node --check prototype_ui/supabaseClient.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax tetap valid.
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+ M CLAUDE_REVIEW.md
+```
+
+Catatan:
+```text
+Status working tree saat pass revisi hanya menunjukkan perubahan lokal pada CLAUDE_REVIEW.md. Tidak ada perubahan tambahan pada file implementasi TASK-004 dari pass revisi ini.
+```
