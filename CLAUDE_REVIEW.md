@@ -1,3 +1,86 @@
+# CLAUDE REVIEW — TASK-002
+
+**Tanggal Review**: 2026-05-08
+**Commit yang direview**: `d0dd3d4` — "Implement TASK-002"
+**Reviewer**: Claude (PM / Architect / Technical Reviewer)
+**Verdict**: ✅ APPROVED
+
+---
+
+## Checklist Review
+
+| # | Cek | Status | Catatan |
+|---|---|---|---|
+| 1 | Sesuai PRD? | ✅ PASS | Field tipe data sesuai PRD 2.3–2.5: NUMERIC untuk metric finansial, INTEGER untuk count, DATE untuk range |
+| 2 | Sesuai TASK-002? | ✅ PASS | Semua item Definition of Done terpenuhi |
+| 3 | Ada scope creep? | ✅ PASS | 3 file saja: SQL baru, log, test results |
+| 4 | Perubahan file relevan? | ✅ PASS | Hanya file yang diharapkan |
+| 5 | Test/check cukup? | ✅ PASS | Real PostgreSQL execution + `\d` kedua tabel + idempotency re-run |
+| 6 | Risiko security? | ✅ PASS | Tidak ada credentials, tidak ada dynamic SQL |
+| 7 | Risiko maintainability? | ✅ PASS | 50 baris, naming konsisten dengan TASK-001 |
+| 8 | Risiko data integrity? | ✅ PASS | CHECK constraints, UNIQUE, NOT NULL semua di tempat yang tepat |
+| 9 | Risiko UX/performance? | ✅ PASS | 3 index mencakup query pattern utama dashboard |
+
+---
+
+## Verifikasi Detail
+
+### Tabel `campaign_snapshots` — Field Coverage
+
+Semua 26 field dari TASK-002 hadir dengan tipe yang benar. Sorotan:
+
+| Keputusan Tipe | Benar? | Alasan |
+|---|---|---|
+| `date_start / date_stop DATE` | ✓ | Data agregat harian — tidak butuh waktu |
+| `spend / cpl / cpm NUMERIC(n,2)` | ✓ | Presisi Rupiah, hindari floating point |
+| `ctr / frequency NUMERIC(6,4)` | ✓ | Cukup untuk rasio seperti 2.3456% |
+| `roas NUMERIC(8,4)` | ✓ | Cukup untuk nilai seperti 3.1234x |
+| `fetched_at TIMESTAMPTZ DEFAULT NOW()` | ✓ | Freshness indicator untuk fallback banner |
+
+### Tabel `campaign_kpi_targets` — Field Coverage
+
+Semua 7 field dari TASK-002 hadir. Codex menambahkan dua item **di luar minimum spec** yang keduanya justified:
+
+1. `brand CHECK (brand IN ('ngajigaes', 'labbaika', 'alaika'))` — tidak diminta DoD tapi konsisten dengan `campaign_snapshots`. Mencegah target KPI masuk untuk brand yang tidak dikenal.
+2. `kpi_type CHECK (kpi_type IN ('roas', 'cpl', 'cpp', 'reach', 'spend'))` — TASKS.md menulis `← 'roas', 'cpl', 'cpp', 'reach', 'spend'` sebagai komentar intent. Codex menginterpretasinya sebagai CHECK constraint. Benar.
+
+Kedua tambahan ini **bukan scope creep** — keduanya merupakan data integrity yang konsisten dengan spec intent.
+
+### Redundant Index Check
+
+Tidak ada masalah redundansi (berbeda dengan TASK-001):
+
+```
+campaign_snapshots indexes:
+  campaign_snapshots_pkey               PRIMARY KEY, btree (id)
+  idx_campaign_snapshots_brand_date     btree (brand, date_start DESC)   ← tidak ada UNIQUE pada kolom ini
+  idx_campaign_snapshots_campaign_level btree (campaign_id, level)        ← tidak ada UNIQUE pada kolom ini
+  idx_campaign_snapshots_fetched_at     btree (fetched_at DESC)           ← tidak ada UNIQUE pada kolom ini
+
+campaign_kpi_targets indexes:
+  campaign_kpi_targets_pkey                       PRIMARY KEY, btree (id)
+  campaign_kpi_targets_campaign_id_kpi_type_key   UNIQUE CONSTRAINT, btree (campaign_id, kpi_type)
+  ← tidak ada explicit CREATE INDEX pada campaign_kpi_targets — benar
+```
+
+Tidak ada duplikat. ✓
+
+### Idempotency
+
+Re-run bersih — semua `NOTICE: relation already exists, skipping`, tidak ada error. Line numbers di NOTICE (30, 41, 44, 47, 50) sesuai posisi statement di file. ✓
+
+### Performance Index Assessment
+
+| Index | Query yang Dilayani | Cukup? |
+|---|---|---|
+| `(brand, date_start DESC)` | Dashboard filter per brand + sort tanggal terbaru | ✓ |
+| `(campaign_id, level)` | Drill-down campaign → adset → ad | ✓ |
+| `(fetched_at DESC)` | Freshness check + cari snapshot terbaru | ✓ |
+
+Tidak ada query pattern dari PRD/TASK yang tidak ter-cover index.
+
+---
+
 # CLAUDE REVIEW — TASK-001
 
 ## Review Ronde 2 — Post-Revision
