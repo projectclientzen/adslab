@@ -40,4 +40,3 @@ Sebelum mulai, ringkas dulu:
 
 Lalu implementasikan ${TASK_ID}.
 EOF
-
