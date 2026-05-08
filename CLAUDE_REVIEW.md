@@ -1,3 +1,53 @@
+# CLAUDE REVIEW — TASK-006
+
+**Tanggal Review**: 2026-05-08
+**Commit yang direview**: `ed42f2a` — "Implement TASK-006 dedup save flow"
+**Reviewer**: Claude (PM / Architect / Technical Reviewer)
+**Verdict**: ✅ APPROVED
+
+---
+
+## Checklist Review
+
+| # | Cek | Status | Catatan |
+|---|---|---|---|
+| 1 | Sesuai PRD? | ✅ PASS | `resolution=ignore-duplicates` via Prefer header adalah pendekatan yang benar; PRD mensyaratkan 0 duplikat tanpa SELECT round-trip |
+| 2 | Sesuai TASK-006? | ✅ PASS | Semua 5 DoD terpenuhi: upsert, dedup counter, popup UI, message routing, dan no hardcoded credentials |
+| 3 | Ada scope creep? | ✅ PASS | `popup.html` + `popup.js` masuk scope TASK-006 (DoD #4 mensyaratkan counter UI di popup) |
+| 4 | Perubahan file relevan? | ✅ PASS | background.js, content.js, manifest.json (host_permissions + popup), popup.html, popup.js |
+| 5 | Test/check cukup? | ⚠️ PARTIAL | Verifikasi properti kode via static check pass; manual browser test belum dijalankan (environment terbatas) |
+| 6 | Risiko security? | ✅ PASS | Tidak ada hardcoded credentials; Supabase config dibaca dari `chrome.storage.local` runtime |
+| 7 | Risiko maintainability? | ⚠️ NOTE | String constant `ADS_LAB_SAVE_AD_RECORDS` diduplikasi di background.js dan content.js — low risk selama string masih cocok, tapi perlu dikonsolidasi ke shared constants di iterasi berikutnya |
+| 8 | Risiko data integrity? | ✅ PASS | `uniqueByLibraryId` de-dupes batch sebelum upsert; server-side `UNIQUE NOT NULL` pada `library_id` juga jadi safety net |
+| 9 | Risiko UX/performance? | ✅ PASS | Popup menggunakan `chrome.storage.session` untuk counter — tidak ada query Supabase dari popup, performa aman |
+
+---
+
+## Verifikasi Definition of Done
+
+| DoD Item | Status | Bukti |
+|---|---|---|
+| `upsertAdsWithIgnoreDuplicates` di background.js | ✅ | Fungsi ada, `Prefer: resolution=ignore-duplicates`, `on_conflict=library_id` |
+| Counter `newCount` / `dupCount` dihitung | ✅ | Logic `inserted = total - duplicates` via response body parsing + `chrome.storage.session` |
+| Popup menampilkan counter | ✅ | `popup.html` + `popup.js` membaca `chrome.storage.session.adsLabStats` |
+| Message routing bg ↔ content berfungsi | ✅ | 3 message types: `ADS_LAB_PROCESS_GRAPHQL_RESPONSE`, `ADS_LAB_SAVE_AD_RECORDS`, `ADS_LAB_GET_DEDUP_STATS` |
+| No hardcoded credentials | ✅ | `getSupabaseConfig()` baca dari `chrome.storage.local` |
+
+---
+
+## Catatan Teknis
+
+**REST API vs JS Client untuk dedup:**
+Codex menggunakan REST API langsung dengan `Prefer: resolution=ignore-duplicates` header, bukan Supabase JS client `.upsert(..., { ignoreDuplicates: true })`. Keduanya ekuivalen untuk MVP — REST API approach lebih eksplisit dan tidak membutuhkan SDK di extension context.
+
+**Duplikasi string constant (minor):**
+`"ADS_LAB_SAVE_AD_RECORDS"` muncul di `background.js` dan `content.js` sebagai string literal. Saat ini match. Jika di masa depan string diubah di satu file tapi tidak yang lain, komunikasi akan silent-fail. Rekomendasi: buat `extension/constants.js` yang di-import keduanya, tapi tidak perlu dilakukan sekarang.
+
+**Config mechanism belum ada:**
+`chrome.storage.local` sudah dibaca untuk Supabase config, tapi belum ada UI/options page untuk user set config. Ini masuk scope task berikutnya — bukan blocker untuk TASK-006.
+
+---
+
 # CLAUDE REVIEW — TASK-005
 
 **Tanggal Review**: 2026-05-08
