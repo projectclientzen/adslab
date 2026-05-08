@@ -4,7 +4,14 @@
   "version": "2.0.0",
   "description": "Capture LP URL dari Meta Ads Library GraphQL untuk ADS LAB.",
   "permissions": ["storage", "webRequest"],
-  "host_permissions": ["https://www.facebook.com/*", "https://*.facebook.com/*"],
+  "host_permissions": [
+    "https://www.facebook.com/*",
+    "https://*.facebook.com/*",
+    "https://*.supabase.co/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
   "background": {
     "service_worker": "background.js"
   },

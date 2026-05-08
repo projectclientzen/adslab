@@ -1,5 +1,8 @@
 const GRAPHQL_URL_FILTER = { urls: ["*://www.facebook.com/api/graphql/*"] };
 const GRAPHQL_MESSAGE_TYPE = "ADS_LAB_PROCESS_GRAPHQL_RESPONSE";
+const SAVE_AD_RECORDS_MESSAGE_TYPE = "ADS_LAB_SAVE_AD_RECORDS";
+const GET_DEDUP_STATS_MESSAGE_TYPE = "ADS_LAB_GET_DEDUP_STATS";
+const DEDUP_STATS_STORAGE_KEY = "adsLabDedupStats";
 const observedGraphqlRequests = new Map();
 
 chrome.webRequest.onBeforeRequest.addListener(
@@ -23,20 +26,45 @@ chrome.runtime.onMessage.addListener(function handleRuntimeMessage(
   sender,
   sendResponse
 ) {
-  if (!message || message.type !== GRAPHQL_MESSAGE_TYPE) {
+  if (!message || !message.type) {
     return false;
   }
 
-  processGraphqlPayload(message.payload, sender)
-    .then(function onSuccess(result) {
+  if (message.type === GRAPHQL_MESSAGE_TYPE) {
+    processGraphqlPayload(message.payload, sender)
+      .then(function onSuccess(result) {
+        sendResponse({ ok: true, result: result });
+      })
+      .catch(function onError(error) {
+        console.warn("[ADS LAB] gagal memproses GraphQL response:", error);
+        sendResponse({ ok: false, error: error.message });
+      });
+
+    return true;
+  }
+
+  if (message.type === SAVE_AD_RECORDS_MESSAGE_TYPE) {
+    upsertAdsWithIgnoreDuplicates(message.records)
+      .then(function onSuccess(result) {
+        sendResponse({ ok: true, result: result });
+      })
+      .catch(function onError(error) {
+        console.warn("[ADS LAB] gagal menyimpan batch ads:", error);
+        sendResponse({ ok: false, error: error.message });
+      });
+
+    return true;
+  }
+
+  if (message.type === GET_DEDUP_STATS_MESSAGE_TYPE) {
+    getDedupStats().then(function onSuccess(result) {
       sendResponse({ ok: true, result: result });
-    })
-    .catch(function onError(error) {
-      console.warn("[ADS LAB] gagal memproses GraphQL response:", error);
-      sendResponse({ ok: false, error: error.message });
     });
 
-  return true;
+    return true;
+  }
+
+  return false;
 });
 
 async function processGraphqlPayload(payload, sender) {
@@ -209,4 +237,112 @@ async function persistLibraryUrlMappings(mappings) {
 
   await chrome.storage.session.set(storagePayload);
   return Object.keys(storagePayload).length;
+}
+
+async function upsertAdsWithIgnoreDuplicates(records) {
+  const sanitizedRecords = sanitizeAdRecords(records);
+  const uniqueRecords = uniqueByLibraryId(sanitizedRecords);
+  const localDuplicateCount = sanitizedRecords.length - uniqueRecords.length;
+
+  if (uniqueRecords.length === 0) {
+    const emptyStats = {
+      insertedCount: 0,
+      duplicateCount: localDuplicateCount,
+      processedCount: sanitizedRecords.length,
+      skippedCount: localDuplicateCount,
+      lastRunAt: new Date().toISOString(),
+    };
+
+    await chrome.storage.session.set({ [DEDUP_STATS_STORAGE_KEY]: emptyStats });
+    return emptyStats;
+  }
+
+  const supabaseConfig = await getSupabaseConfig();
+  const response = await fetch(buildUpsertUrl(supabaseConfig.url), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: supabaseConfig.anonKey,
+      Authorization: "Bearer " + supabaseConfig.anonKey,
+      Prefer: "resolution=ignore-duplicates,return=representation",
+    },
+    body: JSON.stringify(uniqueRecords),
+  });
+
+  if (!response.ok) {
+    throw new Error("Supabase upsert gagal dengan status " + response.status);
+  }
+
+  const insertedRows = await response.json();
+  const insertedCount = Array.isArray(insertedRows) ? insertedRows.length : 0;
+  const duplicateCount = sanitizedRecords.length - insertedCount;
+  const stats = {
+    insertedCount: insertedCount,
+    duplicateCount: duplicateCount,
+    processedCount: sanitizedRecords.length,
+    skippedCount: duplicateCount,
+    lastRunAt: new Date().toISOString(),
+  };
+
+  await chrome.storage.session.set({ [DEDUP_STATS_STORAGE_KEY]: stats });
+  return stats;
+}
+
+async function getDedupStats() {
+  const data = await chrome.storage.session.get(DEDUP_STATS_STORAGE_KEY);
+  return (
+    data[DEDUP_STATS_STORAGE_KEY] || {
+      insertedCount: 0,
+      duplicateCount: 0,
+      processedCount: 0,
+      skippedCount: 0,
+      lastRunAt: null,
+    }
+  );
+}
+
+async function getSupabaseConfig() {
+  const config = await chrome.storage.local.get(["SUPABASE_URL", "SUPABASE_ANON_KEY"]);
+
+  if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY) {
+    throw new Error("SUPABASE_URL dan SUPABASE_ANON_KEY harus diset di chrome.storage.local");
+  }
+
+  return {
+    url: config.SUPABASE_URL.replace(/\/$/, ""),
+    anonKey: config.SUPABASE_ANON_KEY,
+  };
+}
+
+function buildUpsertUrl(supabaseUrl) {
+  return (
+    supabaseUrl +
+    "/rest/v1/ads_detail?on_conflict=library_id"
+  );
+}
+
+function sanitizeAdRecords(records) {
+  const safeRecords = Array.isArray(records) ? records : [];
+
+  return safeRecords
+    .filter(function hasLibraryId(record) {
+      return record && typeof record.library_id === "string" && record.library_id.trim();
+    })
+    .map(function normalizeRecord(record) {
+      return Object.assign({}, record, {
+        library_id: record.library_id.trim(),
+      });
+    });
+}
+
+function uniqueByLibraryId(records) {
+  const byLibraryId = new Map();
+
+  records.forEach(function assignRecord(record) {
+    if (!byLibraryId.has(record.library_id)) {
+      byLibraryId.set(record.library_id, record);
+    }
+  });
+
+  return Array.from(byLibraryId.values());
 }

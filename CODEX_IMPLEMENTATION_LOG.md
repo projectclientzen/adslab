@@ -82,3 +82,19 @@
 - Parser background membersihkan prefix response seperti `for (;;);` / `while(1);`, dan interceptor halaman menerima URL GraphQL relatif seperti `/api/graphql/` agar flow Meta lebih realistis.
 - Validasi dilakukan dengan grep permissions, grep storage/mapping, dan `node --check` untuk semua file JS extension; detail output disimpan di `TEST_RESULTS.md`.
 - Manual test di Chrome Extension belum dijalankan dari environment terminal ini, jadi target scrape 10 iklan masih perlu verifikasi browser langsung.
+
+## 2026-05-08 — TASK-006
+
+- Scope yang dikerjakan hanya `TASK-006`.
+- `PRD.md` tidak ada di repo, jadi referensi implementasi mengikuti `TASKS.md`, `ACCEPTANCE_CRITERIA.md`, dan bagian deduplication di `ADS_LAB_PRD_v2 2.md`.
+- Menambahkan alur deduplication sebelum insert ke Supabase pada extension:
+  - [extension/background.js](/Volumes/Daily Project/adslab/extension/background.js) sekarang menangani message save batch ads dan menjalankan fungsi `upsertAdsWithIgnoreDuplicates(...)`
+  - upsert dilakukan ke endpoint REST Supabase `ads_detail?on_conflict=library_id` dengan header `Prefer: resolution=ignore-duplicates,return=representation` sebagai equivalent dari `upsert(..., { onConflict: 'library_id', ignoreDuplicates: true })`
+  - batch lokal juga dibersihkan dari `library_id` duplikat sebelum request, tetapi record existing di database tetap ditangani oleh mekanisme ignore-duplicates di Supabase
+  - statistik hasil save (`insertedCount`, `duplicateCount`, `processedCount`) disimpan ke `chrome.storage.session`
+  - [extension/content.js](/Volumes/Daily Project/adslab/extension/content.js) menambah helper `prepareAndSaveRecords(...)` dan `adsLabGetDedupStats()` untuk menjembatani record scrape ke background
+  - [extension/popup.html](/Volumes/Daily Project/adslab/extension/popup.html) dan [extension/popup.js](/Volumes/Daily Project/adslab/extension/popup.js) ditambahkan agar popup extension menampilkan counter `X baru / Y duplikat`
+  - [extension/manifest.json](/Volumes/Daily Project/adslab/extension/manifest.json) diperbarui untuk `default_popup` dan host permission Supabase
+- Tidak ada perubahan scope ke task lain; fokus hanya pada save dedup dan counter popup.
+- Validasi dilakukan dengan grep upsert/dedup, pengecekan wiring popup, dan `node --check` untuk file JS yang berubah; detail output disimpan di `TEST_RESULTS.md`.
+- Verifikasi manual terhadap Supabase SQL Editor dan scrape domain yang sama 2x masih perlu dijalankan di browser/instance Supabase nyata.

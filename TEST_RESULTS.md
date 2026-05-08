@@ -798,3 +798,138 @@ Catatan:
 ```text
 Implementasi final mengakomodasi variasi request URL GraphQL yang relatif pada halaman Meta dan membersihkan prefix response Facebook seperti `for (;;);` atau `while(1);` sebelum `JSON.parse`.
 ```
+
+# TEST_RESULTS — TASK-006
+
+Tanggal: 2026-05-08
+
+## 1. Upsert / dedup code path check
+
+Command:
+```bash
+grep -E "upsert|ignoreDuplicates|ON CONFLICT" extension/content.js extension/background.js
+```
+
+Output:
+```text
+extension/background.js:    upsertAdsWithIgnoreDuplicates(message.records)
+extension/background.js:async function upsertAdsWithIgnoreDuplicates(records) {
+extension/background.js:    throw new Error("Supabase upsert gagal dengan status " + response.status);
+```
+
+## 2. Popup wiring check
+
+Command:
+```bash
+grep -n "default_popup\|popup.html\|popup.js" extension/manifest.json extension/popup.html extension/popup.js
+```
+
+Output:
+```text
+extension/manifest.json:13:    "default_popup": "popup.html"
+extension/popup.html:42:    <script src="./popup.js"></script>
+```
+
+## 3. Background syntax check
+
+Command:
+```bash
+node --check extension/background.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax file valid.
+
+## 4. Content script syntax check
+
+Command:
+```bash
+node --check extension/content.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax file valid.
+
+## 5. Popup script syntax check
+
+Command:
+```bash
+node --check extension/popup.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax file valid.
+
+## 6. Counter storage implementation check
+
+Command:
+```bash
+grep -n "chrome.storage.session\|insertedCount\|duplicateCount" extension/background.js extension/popup.js
+```
+
+Output:
+```text
+extension/background.js:238:  await chrome.storage.session.set(storagePayload);
+extension/background.js:249:      insertedCount: 0,
+extension/background.js:250:      duplicateCount: localDuplicateCount,
+extension/background.js:256:    await chrome.storage.session.set({ [DEDUP_STATS_STORAGE_KEY]: emptyStats });
+extension/background.js:277:  const insertedCount = Array.isArray(insertedRows) ? insertedRows.length : 0;
+extension/background.js:278:  const duplicateCount = sanitizedRecords.length - insertedCount;
+extension/background.js:280:    insertedCount: insertedCount,
+extension/background.js:281:    duplicateCount: duplicateCount,
+extension/background.js:283:    skippedCount: duplicateCount,
+extension/background.js:287:  await chrome.storage.session.set({ [DEDUP_STATS_STORAGE_KEY]: stats });
+extension/background.js:292:  const data = await chrome.storage.session.get(DEDUP_STATS_STORAGE_KEY);
+extension/background.js:295:      insertedCount: 0,
+extension/background.js:296:      duplicateCount: 0,
+extension/popup.js:14:  chrome.storage.session.get(DEDUP_STATS_STORAGE_KEY).then(function handleStats(data) {
+extension/popup.js:22:  const insertedCount = stats ? stats.insertedCount || 0 : 0;
+extension/popup.js:23:  const duplicateCount = stats ? stats.duplicateCount || 0 : 0;
+extension/popup.js:25:  counterElement.textContent = insertedCount + " baru / " + duplicateCount + " duplikat";
+```
+
+## 7. Working tree summary after TASK-006
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+ M extension/background.js
+ M extension/content.js
+ M extension/manifest.json
+?? extension/popup.html
+?? extension/popup.js
+```
+
+## 8. Manual Supabase verification note
+
+Command:
+```text
+Setelah scrape 2x domain yang sama:
+SELECT library_id, COUNT(*) FROM ads_detail GROUP BY library_id HAVING COUNT(*) > 1;
+```
+
+Output:
+```text
+Belum dijalankan di environment terminal ini.
+```
+
+Catatan:
+```text
+TASK-006 membutuhkan verifikasi manual terhadap database Supabase nyata dan run scraping berulang pada domain yang sama. Dari terminal ini saya hanya bisa memverifikasi bahwa path upsert ignore-duplicates, counter storage, dan popup counter sudah terpasang dengan benar.
+```

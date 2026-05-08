@@ -4,6 +4,8 @@ const BACKGROUND_MESSAGE_TYPE = "ADS_LAB_PROCESS_GRAPHQL_RESPONSE";
 const ATTACH_RECORD_MESSAGE = "ADS_LAB_ATTACH_RECORD";
 const ATTACH_RECORDS_MESSAGE = "ADS_LAB_ATTACH_RECORDS";
 const GET_DESTINATION_URL_MESSAGE = "ADS_LAB_GET_DESTINATION_URL";
+const SAVE_AD_RECORDS_MESSAGE = "ADS_LAB_SAVE_AD_RECORDS";
+const GET_DEDUP_STATS_MESSAGE = "ADS_LAB_GET_DEDUP_STATS";
 const INJECTED_SCRIPT_ID = "ads-lab-fetch-interceptor";
 
 injectFetchInterceptor();
@@ -75,6 +77,20 @@ chrome.runtime.onMessage.addListener(function handleContentMessage(
     return true;
   }
 
+  if (message.type === SAVE_AD_RECORDS_MESSAGE) {
+    prepareAndSaveRecords(message.records).then(function respond(result) {
+      sendResponse(result);
+    });
+    return true;
+  }
+
+  if (message.type === GET_DEDUP_STATS_MESSAGE) {
+    getDedupStats().then(function respond(stats) {
+      sendResponse({ stats: stats });
+    });
+    return true;
+  }
+
   return false;
 });
 
@@ -120,3 +136,23 @@ function attachDestinationUrlsToRecords(records) {
   const safeRecords = Array.isArray(records) ? records : [];
   return Promise.all(safeRecords.map(attachDestinationUrlToRecord));
 }
+
+async function prepareAndSaveRecords(records) {
+  const recordsWithDestinationUrl = await attachDestinationUrlsToRecords(records);
+
+  return chrome.runtime.sendMessage({
+    type: SAVE_AD_RECORDS_MESSAGE,
+    records: recordsWithDestinationUrl,
+  });
+}
+
+async function getDedupStats() {
+  const response = await chrome.runtime.sendMessage({
+    type: GET_DEDUP_STATS_MESSAGE,
+  });
+
+  return response && response.result ? response.result : response && response.stats ? response.stats : null;
+}
+
+window.adsLabPrepareAndSaveRecords = prepareAndSaveRecords;
+window.adsLabGetDedupStats = getDedupStats;
