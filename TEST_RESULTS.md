@@ -404,3 +404,93 @@ Catatan:
 ```text
 Verifikasi TASK-002 dijalankan pada database bersih `task002_validation_1142` di cluster PostgreSQL lokal sementara pada socket `/private/tmp/adslab_pg_socket_rev`. Selain check command dari task, migration juga divalidasi lewat eksekusi nyata dan inspeksi schema hasilnya.
 ```
+
+# TEST_RESULTS — TASK-003
+
+Tanggal: 2026-05-08
+
+## 1. Folder structure check
+
+Command:
+```bash
+ls -la extension/ supabase/migrations/
+```
+
+Output:
+```text
+extension/:
+total 16
+drwxr-xr-x   4 maszen  admin  128 May  8 12:11 .
+drwxr-xr-x  20 maszen  admin  640 May  8 12:11 ..
+-rw-r--r--   1 maszen  admin    1 May  8 12:11 .gitkeep
+-rw-r--r--   1 maszen  admin  271 May  8 12:11 README.md
+
+supabase/migrations/:
+total 24
+drwxr-xr-x  5 maszen  admin   160 May  8 12:11 .
+drwxr-xr-x  5 maszen  admin   160 May  8 12:11 ..
+-rw-r--r--  1 maszen  admin     1 May  8 12:11 .gitkeep
+-rw-r--r--  1 maszen  admin   964 May  7 16:19 001_create_ads_detail.sql
+-rw-r--r--  1 maszen  admin  1628 May  8 11:41 002_create_campaign_snapshots.sql
+```
+
+## 2. `.env.example` variable count check
+
+Command:
+```bash
+grep -c "=" .env.example
+```
+
+Output:
+```text
+7
+```
+
+## 3. `.gitignore` check for `.env`
+
+Command:
+```bash
+grep "^\.env$" .gitignore
+```
+
+Output:
+```text
+.env
+```
+
+## 4. `netlify.toml` publish target check
+
+Command:
+```bash
+grep "prototype_ui" netlify.toml
+```
+
+Output:
+```text
+  publish = "prototype_ui"
+```
+
+## 5. Working tree summary after TASK-003
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+ M .gitignore
+?? .env.example
+?? extension/
+?? netlify.toml
+?? supabase/.gitkeep
+?? supabase/README.md
+?? supabase/migrations/.gitkeep
+```
+
+## 6. Verification note
+
+Catatan:
+```text
+TASK-003 hanya membutuhkan verifikasi struktur file dan konfigurasi dasar. Tidak ada lint/build/runtime test tambahan yang relevan karena task ini tidak menambah kode aplikasi atau migration baru.
+```

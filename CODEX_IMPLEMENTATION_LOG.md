@@ -30,3 +30,17 @@
 - Catatan implementasi:
   - `campaign_kpi_targets.brand` juga diberi `CHECK` constraint agar konsisten dengan brand dashboard yang didukung
   - `campaign_kpi_targets.kpi_type` diberi `CHECK` constraint sesuai daftar KPI pada task untuk menjaga integritas data target
+
+## 2026-05-08 — TASK-003
+
+- Scope yang dikerjakan hanya `TASK-003`.
+- `PRD.md` tidak ada di repo, jadi referensi struktur mengikuti `TASKS.md` dan konteks komponen project di `ADS_LAB_PRD_v2 2.md`.
+- Menambahkan struktur dasar project untuk komponen yang belum ada:
+  - folder [extension/README.md](/Volumes/Daily Project/adslab/extension/README.md) dan placeholder `extension/.gitkeep`
+  - placeholder `supabase/.gitkeep` dan `supabase/migrations/.gitkeep`
+  - [supabase/README.md](/Volumes/Daily Project/adslab/supabase/README.md) sebagai penjelas singkat area backend
+  - [netlify.toml](/Volumes/Daily Project/adslab/netlify.toml) dengan `publish = "prototype_ui"` dan SPA redirect
+  - [.env.example](/Volumes/Daily Project/adslab/.env.example) dengan 7 environment variable placeholder tanpa secret asli
+  - update [.gitignore](/Volumes/Daily Project/adslab/.gitignore) untuk memastikan `.env` tidak ter-commit
+- Folder `prototype_ui/` tidak diubah, sesuai instruksi task.
+- Validasi dilakukan dengan check command dari `TASKS.md`; detail output disimpan di `TEST_RESULTS.md`.
