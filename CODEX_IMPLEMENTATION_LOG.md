@@ -133,3 +133,9 @@
 - Tidak ada token atau credential hardcoded di file.
 - Validasi dilakukan dengan grep credential check, grep response-shape markers, `node --check`, dan import sanity check; detail output disimpan di `TEST_RESULTS.md`.
 - Netlify CLI tidak terpasang di environment ini, jadi invoke function secara lokal belum dijalankan.
+- Revisi setelah review Claude:
+  - `fetchInsightsForBrand()` sekarang mengikuti `paging.next` sampai habis, sehingga data tidak berhenti di halaman pertama Meta API
+  - menambahkan migration [supabase/migrations/003_add_snapshot_unique.sql](/Volumes/Daily Project/adslab/supabase/migrations/003_add_snapshot_unique.sql) untuk constraint `uq_snapshot_identity`
+  - `adset_id` dan `ad_id` dinormalisasi menjadi string kosong saat tidak ada nilai, lalu migration mengubah kedua kolom itu menjadi `NOT NULL DEFAULT ''` agar conflict key stabil di PostgreSQL 14
+  - fallback `replaceSnapshotsForBrand()` yang sebelumnya melakukan `DELETE seluruh brand -> INSERT` dihapus untuk menghindari kehilangan data historis jika insert gagal
+  - check command tambahan dari Claude dijalankan ulang, termasuk validasi migration revisi pada PostgreSQL lokal

@@ -1160,3 +1160,187 @@ Catatan:
 ```text
 TASK-008 sudah diverifikasi secara statik untuk struktur response, wiring Netlify Function, dan tidak adanya credential hardcoded. Fetch nyata ke Meta API dan write ke Supabase masih memerlukan env vars yang benar (`META_ACCESS_TOKEN_*`, `META_ACCOUNT_ID_*`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` atau `SUPABASE_SERVICE_ROLE_KEY`) serta environment runtime Netlify/Node dengan akses network.
 ```
+
+## 9. Claude review re-check: pagination
+
+Command:
+```bash
+grep -n "paging\|next\|allRows\|while" netlify/functions/meta-fetch.js
+```
+
+Output:
+```text
+137:  const allRows = [];
+138:  let nextUrl = endpoint;
+140:  while (nextUrl) {
+141:    const response = await fetch(nextUrl);
+151:      allRows.push.apply(allRows, json.data);
+154:    nextUrl = json.paging && json.paging.next ? json.paging.next : null;
+157:  return allRows;
+```
+
+## 10. Claude review re-check: migration file exists
+
+Command:
+```bash
+ls supabase/migrations/003_add_snapshot_unique.sql
+```
+
+Output:
+```text
+supabase/migrations/003_add_snapshot_unique.sql
+```
+
+## 11. Claude review re-check: UNIQUE constraint definition
+
+Command:
+```bash
+grep "UNIQUE\|uq_snapshot" supabase/migrations/003_add_snapshot_unique.sql
+```
+
+Output:
+```text
+    ADD CONSTRAINT uq_snapshot_identity
+    UNIQUE (brand, campaign_id, adset_id, ad_id, level, date_start, date_stop);
+```
+
+## 12. Claude review re-check: dangerous fallback removed
+
+Command:
+```bash
+grep -n "replaceSnapshotsForBrand\|DELETE" netlify/functions/meta-fetch.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: command exit code `1` karena fallback delete-insert memang sudah dihapus.
+
+## 13. Claude review re-check: function syntax
+
+Command:
+```bash
+node --check netlify/functions/meta-fetch.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax tetap valid setelah revisi.
+
+## 14. PostgreSQL validation database exists
+
+Command:
+```bash
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d postgres -c "SELECT datname FROM pg_database WHERE datname = 'task008_revision_1357';"
+```
+
+Output:
+```text
+        datname        
+-----------------------
+ task008_revision_1357
+(1 row)
+```
+
+## 15. Apply base migration for revision validation
+
+Command:
+```bash
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d task008_revision_1357 -v ON_ERROR_STOP=1 -f supabase/migrations/002_create_campaign_snapshots.sql
+```
+
+Output:
+```text
+CREATE EXTENSION
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+```
+
+## 16. Apply revision migration
+
+Command:
+```bash
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d task008_revision_1357 -v ON_ERROR_STOP=1 -f supabase/migrations/003_add_snapshot_unique.sql
+```
+
+Output:
+```text
+UPDATE 0
+ALTER TABLE
+ALTER TABLE
+```
+
+## 17. Inspect revised `campaign_snapshots` schema
+
+Command:
+```bash
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d task008_revision_1357 -c "\d campaign_snapshots"
+```
+
+Output:
+```text
+                           Table "public.campaign_snapshots"
+     Column     |           Type           | Collation | Nullable |      Default
+----------------+--------------------------+-----------+----------+--------------------
+ id             | uuid                     |           | not null | uuid_generate_v4()
+ brand          | text                     |           | not null |
+ campaign_id    | text                     |           | not null |
+ campaign_name  | text                     |           | not null |
+ adset_id       | text                     |           | not null | ''::text
+ adset_name     | text                     |           |          |
+ ad_id          | text                     |           | not null | ''::text
+ ad_name        | text                     |           |          |
+ level          | text                     |           | not null |
+ date_start     | date                     |           | not null |
+ date_stop      | date                     |           | not null |
+ spend          | numeric(12,2)            |           |          |
+ reach          | integer                  |           |          |
+ impressions    | integer                  |           |          |
+ clicks         | integer                  |           |          |
+ ctr            | numeric(6,4)             |           |          |
+ cpm            | numeric(10,2)            |           |          |
+ frequency      | numeric(6,4)             |           |          |
+ purchases      | integer                  |           |          |
+ purchase_value | numeric(12,2)            |           |          |
+ leads          | integer                  |           |          |
+ roas           | numeric(8,4)             |           |          |
+ cpl            | numeric(10,2)            |           |          |
+ cpp            | numeric(10,2)            |           |          |
+ status         | text                     |           |          |
+ fetched_at     | timestamp with time zone |           |          | now()
+Indexes:
+    "campaign_snapshots_pkey" PRIMARY KEY, btree (id)
+    "idx_campaign_snapshots_brand_date" btree (brand, date_start DESC)
+    "idx_campaign_snapshots_campaign_level" btree (campaign_id, level)
+    "idx_campaign_snapshots_fetched_at" btree (fetched_at DESC)
+    "uq_snapshot_identity" UNIQUE CONSTRAINT, btree (brand, campaign_id, adset_id, ad_id, level, date_start, date_stop)
+Check constraints:
+    "campaign_snapshots_brand_check" CHECK (brand = ANY (ARRAY['ngajigaes'::text, 'labbaika'::text, 'alaika'::text]))
+    "campaign_snapshots_level_check" CHECK (level = ANY (ARRAY['campaign'::text, 'adset'::text, 'ad'::text]))
+```
+
+## 18. Working tree summary after TASK-008 revision
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+ M netlify/functions/meta-fetch.js
+?? supabase/migrations/003_add_snapshot_unique.sql
+```
+
+Catatan:
+```text
+Revisi TASK-008 hanya mengubah `netlify/functions/meta-fetch.js` dan menambahkan `supabase/migrations/003_add_snapshot_unique.sql`. File lain tidak disentuh dalam pass revisi ini.
+```

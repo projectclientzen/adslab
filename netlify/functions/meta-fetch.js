@@ -134,15 +134,27 @@ async function fetchInsightsForBrand(brand) {
     encodeURIComponent(accountId) +
     "/insights?" +
     params.toString();
-  const response = await fetch(endpoint);
+  const allRows = [];
+  let nextUrl = endpoint;
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error("Meta API gagal untuk " + brand + ": " + response.status + " " + errorText);
+  while (nextUrl) {
+    const response = await fetch(nextUrl);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error("Meta API gagal untuk " + brand + ": " + response.status + " " + errorText);
+    }
+
+    const json = await response.json();
+
+    if (Array.isArray(json.data)) {
+      allRows.push.apply(allRows, json.data);
+    }
+
+    nextUrl = json.paging && json.paging.next ? json.paging.next : null;
   }
 
-  const json = await response.json();
-  return Array.isArray(json.data) ? json.data : [];
+  return allRows;
 }
 
 function transformInsightsRows(brand, rows, fetchedAt) {
@@ -168,9 +180,9 @@ function transformInsightsRows(brand, rows, fetchedAt) {
       brand: brand,
       campaign_id: nullIfEmpty(row.campaign_id),
       campaign_name: nullIfEmpty(row.campaign_name) || "Unknown Campaign",
-      adset_id: nullIfEmpty(row.adset_id),
+      adset_id: nullIfEmpty(row.adset_id) || "",
       adset_name: nullIfEmpty(row.adset_name),
-      ad_id: nullIfEmpty(row.ad_id),
+      ad_id: nullIfEmpty(row.ad_id) || "",
       ad_name: nullIfEmpty(row.ad_name),
       level: "ad",
       date_start: row.date_start,
@@ -222,68 +234,9 @@ async function upsertSnapshotsForBrand(brand, rows) {
   }
 
   const upsertErrorText = await upsertResponse.text();
-
-  if (/constraint|on_conflict|unique/i.test(upsertErrorText)) {
-    return replaceSnapshotsForBrand(supabase, brand, rows);
-  }
-
   throw new Error(
     "Supabase upsert gagal untuk " + brand + ": " + upsertResponse.status + " " + upsertErrorText
   );
-}
-
-async function replaceSnapshotsForBrand(supabase, brand, rows) {
-  const deleteResponse = await fetch(
-    supabase.url +
-      "/rest/v1/campaign_snapshots?brand=eq." +
-      encodeURIComponent(brand),
-    {
-      method: "DELETE",
-      headers: {
-        apikey: supabase.key,
-        Authorization: "Bearer " + supabase.key,
-        Prefer: "return=minimal",
-      },
-    }
-  );
-
-  if (!deleteResponse.ok) {
-    const deleteErrorText = await deleteResponse.text();
-    throw new Error(
-      "Supabase delete fallback gagal untuk " +
-        brand +
-        ": " +
-        deleteResponse.status +
-        " " +
-        deleteErrorText
-    );
-  }
-
-  const insertResponse = await fetch(supabase.url + "/rest/v1/campaign_snapshots", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: supabase.key,
-      Authorization: "Bearer " + supabase.key,
-      Prefer: "return=representation",
-    },
-    body: JSON.stringify(rows),
-  });
-
-  if (!insertResponse.ok) {
-    const insertErrorText = await insertResponse.text();
-    throw new Error(
-      "Supabase insert fallback gagal untuk " +
-        brand +
-        ": " +
-        insertResponse.status +
-        " " +
-        insertErrorText
-    );
-  }
-
-  const insertedRows = await insertResponse.json();
-  return Array.isArray(insertedRows) ? insertedRows.length : rows.length;
 }
 
 function getSupabaseConfig() {
