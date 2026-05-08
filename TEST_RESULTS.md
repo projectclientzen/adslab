@@ -1051,3 +1051,112 @@ Catatan:
 ```text
 TASK-007 membutuhkan verifikasi manual di browser extension untuk memastikan observer tidak berhenti di tengah pada halaman dengan 300+ iklan. Dari terminal ini saya hanya bisa memverifikasi tidak ada timer-based scroll, observer wiring, progress state, dan validitas syntax.
 ```
+
+# TEST_RESULTS — TASK-008
+
+Tanggal: 2026-05-08
+
+## 1. Hardcoded token check
+
+Command:
+```bash
+grep -E "EAA|access_token.*=.*[A-Za-z0-9]{20}" netlify/functions/meta-fetch.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: command exit code `1` karena memang tidak ada token hardcoded yang match.
+
+## 2. Response structure marker check
+
+Command:
+```bash
+grep -E "success|fetched_at|error" netlify/functions/meta-fetch.js | wc -l
+```
+
+Output:
+```text
+      15
+```
+
+## 3. Function syntax check
+
+Command:
+```bash
+node --check netlify/functions/meta-fetch.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax file valid.
+
+## 4. Handler import sanity check
+
+Command:
+```bash
+node -e "const mod=require('./netlify/functions/meta-fetch.js'); console.log(typeof mod.handler)"
+```
+
+Output:
+```text
+function
+```
+
+## 5. Netlify CLI availability check
+
+Command:
+```bash
+command -v netlify || echo "netlify not installed"
+```
+
+Output:
+```text
+netlify not installed
+```
+
+Catatan: karena CLI tidak tersedia, `netlify functions:invoke meta-fetch` belum bisa dijalankan di environment ini.
+
+## 6. Netlify functions directory config check
+
+Command:
+```bash
+grep -n "directory = \"netlify/functions\"\|publish = \"prototype_ui\"" netlify.toml
+```
+
+Output:
+```text
+2:  publish = "prototype_ui"
+5:  directory = "netlify/functions"
+```
+
+## 7. Working tree summary after TASK-008
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+ M netlify.toml
+ M scripts/ai-after-codex.sh
+?? netlify/
+```
+
+Catatan:
+```text
+Perubahan pada `scripts/ai-after-codex.sh` sudah ada sebelumnya dan tidak disentuh oleh TASK-008. Perubahan TASK-008 sendiri ada pada `netlify.toml` dan folder `netlify/functions/`.
+```
+
+## 8. Verification note
+
+Catatan:
+```text
+TASK-008 sudah diverifikasi secara statik untuk struktur response, wiring Netlify Function, dan tidak adanya credential hardcoded. Fetch nyata ke Meta API dan write ke Supabase masih memerlukan env vars yang benar (`META_ACCESS_TOKEN_*`, `META_ACCOUNT_ID_*`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` atau `SUPABASE_SERVICE_ROLE_KEY`) serta environment runtime Netlify/Node dengan akses network.
+```

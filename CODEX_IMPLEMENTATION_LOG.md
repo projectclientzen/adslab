@@ -114,3 +114,22 @@
 - Tidak ada `setInterval` atau `setTimeout` yang dipakai untuk trigger scroll.
 - Validasi dilakukan dengan grep no-timer check, grep `IntersectionObserver`, grep progress state, dan `node --check`; detail output disimpan di `TEST_RESULTS.md`.
 - Manual test pada halaman 300+ iklan masih perlu dilakukan langsung di browser extension karena tidak bisa disimulasikan dari terminal ini.
+
+## 2026-05-08 — TASK-008
+
+- Scope yang dikerjakan hanya `TASK-008`.
+- `PRD.md` tidak ada di repo, jadi referensi implementasi mengikuti `TASKS.md`, `ACCEPTANCE_CRITERIA.md`, dan schema `campaign_snapshots` yang sudah dibuat sebelumnya.
+- Menambahkan file [netlify/functions/meta-fetch.js](/Volumes/Daily Project/adslab/netlify/functions/meta-fetch.js) sebagai Netlify Function untuk:
+  - fetch Meta Marketing API v20.0 per brand (`ngajigaes`, `labbaika`, `alaika`) secara terpisah
+  - membaca token dari `META_ACCESS_TOKEN_<BRAND>` dan account ID dari `META_ACCOUNT_ID_<BRAND>`
+  - mentransform response granular level `ad` ke schema `campaign_snapshots`
+  - menghitung field turunan `purchases`, `purchase_value`, `leads`, `roas`, `cpl`, dan `cpp`
+  - mengembalikan summary per brand dengan `success`, `count`, `fetched_at`, dan `error`
+  - menjaga error isolation: satu brand gagal tidak menghentikan brand lain
+- Upsert ke Supabase diimplementasikan dengan dua langkah:
+  - mencoba REST upsert ke `campaign_snapshots` dengan `on_conflict`
+  - fallback delete+insert per brand jika schema target belum punya unique constraint yang cocok untuk upsert langsung
+- [netlify.toml](/Volumes/Daily Project/adslab/netlify.toml) diperbarui dengan section `[functions]` yang menunjuk ke `netlify/functions`.
+- Tidak ada token atau credential hardcoded di file.
+- Validasi dilakukan dengan grep credential check, grep response-shape markers, `node --check`, dan import sanity check; detail output disimpan di `TEST_RESULTS.md`.
+- Netlify CLI tidak terpasang di environment ini, jadi invoke function secara lokal belum dijalankan.
