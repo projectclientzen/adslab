@@ -1,3 +1,85 @@
+# CLAUDE REVIEW — TASK-004
+
+**Tanggal Review**: 2026-05-08
+**Commit yang direview**: `010bdca` — "Implement TASK-004 Supabase client"
+**Reviewer**: Claude (PM / Architect / Technical Reviewer)
+**Verdict**: ✅ APPROVED
+
+---
+
+## Checklist Review
+
+| # | Cek | Status | Catatan |
+|---|---|---|---|
+| 1 | Sesuai PRD? | ✅ PASS | CDN-based, zero build step, graceful degradation |
+| 2 | Sesuai TASK-004? | ✅ PASS | Semua 5 DoD terpenuhi |
+| 3 | Ada scope creep? | ✅ PASS | 2 file yang diubah: `supabaseClient.js` (baru) + `index.html` (2 baris) |
+| 4 | Perubahan file relevan? | ✅ PASS | Sesuai "Files Likely to Change" di spec |
+| 5 | Test/check cukup? | ✅ PASS | 3 grep checks + `node --check` syntax validation |
+| 6 | Risiko security? | ✅ PASS | Tidak ada credentials hardcoded; `anon` key desainnya memang public |
+| 7 | Risiko maintainability? | ✅ PASS | IIFE pattern benar untuk browser global module |
+| 8 | Risiko data integrity? | ✅ PASS | `upsert` dengan `onConflict` benar; mock data diberi `status: "mock-fallback"` |
+| 9 | Risiko UX/performance? | ✅ PASS | Script di bottom of body — lebih baik dari spec yang menyebut `<head>` |
+
+---
+
+## Verifikasi Definition of Done
+
+| DoD Item | Status | Bukti |
+|---|---|---|
+| File `supabaseClient.js` ada | ✅ | Diff: 221 baris baru |
+| Init dari `window.SUPABASE_URL` dan `window.SUPABASE_ANON_KEY` | ✅ | Baris 3–4 IIFE |
+| 3 fungsi helper ada | ✅ | grep count → 15 (jauh di atas minimum 3) |
+| Fallback mock + warning jika config tidak ada | ✅ | grep count → 24 |
+| Tidak ada hardcoded credentials | ✅ | grep → 0 output |
+
+---
+
+## Analisis Kode
+
+### Initialization Flow (Benar)
+
+```
+index.html load order:
+  1. CDN library   → window.supabase = { createClient, ... }
+  2. supabaseClient.js IIFE:
+       const supabaseLibrary = window.supabase  ← capture CDN library
+       ... define helpers ...
+       window.supabase = supabaseLibrary.createClient(url, key)  ← replace with client
+  3. app.js        → dapat memanggil window.fetchLatestSnapshot dll
+```
+
+Reassignment `window.supabase` dari library ke client instance adalah satu-satunya cara yang bisa dilakukan tanpa module system di browser. Benar dan tidak ada race condition karena semua script synchronous tanpa `async`/`defer`. ✓
+
+### Fallback Logic (Benar)
+
+Tiga kondisi tertangani:
+1. CDN tidak termuat (`supabaseLibrary` null) → `window.supabase = null`, warning, mock
+2. Config tidak ada (`hasSupabaseConfig = false`) → `window.supabase = null`, warning, mock
+3. Query error saat runtime → catch per-fungsi, warning, mock
+
+Setiap helper cek `if (!window.supabase)` sebelum query — fallback ke mock. ✓
+
+### Script Placement
+
+Spec menyebut "di head" tapi Codex meletakkan di bottom of body:
+```html
+<script src="...supabase-js@2"></script>
+<script src="./supabaseClient.js"></script>
+<script src="./app.js"></script>  ← sudah ada di sini
+```
+Ini **lebih baik** dari spec — tidak memblokir rendering. Konsisten dengan posisi `app.js` yang juga di bottom body. Acceptable deviation. ✓
+
+### Satu Catatan Desain (Bukan Blocker)
+
+`saveKpiTarget` menentukan `brand` dari `window.ACTIVE_BRAND || window.DEFAULT_BRAND || "ngajigaes"`:
+```javascript
+const brand = window.ACTIVE_BRAND || window.DEFAULT_BRAND || "ngajigaes";
+```
+`window.ACTIVE_BRAND` belum di-set oleh `app.js` manapun saat ini. Artinya semua KPI target akan disimpan dengan `brand = "ngajigaes"` sampai TASK-012 mengintegrasikan state management. Ini **disengaja** — TASK-004 hanya menyiapkan modul, bukan integrasi state. TASK-012 yang akan memperbaiki ini. Tidak perlu diubah sekarang.
+
+---
+
 # CLAUDE REVIEW — TASK-003
 
 **Tanggal Review**: 2026-05-08
