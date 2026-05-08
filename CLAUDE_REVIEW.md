@@ -1,3 +1,86 @@
+# CLAUDE REVIEW — TASK-005
+
+**Tanggal Review**: 2026-05-08
+**Commit yang direview**: `31b0047` — "Implement TASK-003 project structure and config" *(berisi TASK-005)*
+**Reviewer**: Claude (PM / Architect / Technical Reviewer)
+**Verdict**: ✅ APPROVED
+
+---
+
+## Checklist Review
+
+| # | Cek | Status | Catatan |
+|---|---|---|---|
+| 1 | Sesuai PRD? | ✅ PASS | Alternatif yang dipilih (fetch override + postMessage) adalah pendekatan yang benar untuk MV3 |
+| 2 | Sesuai TASK-005? | ✅ PASS | Semua 4 DoD yang bisa diverifikasi secara statis terpenuhi |
+| 3 | Ada scope creep? | ✅ PASS | `content.js` dan `injected-fetch.js` diperlukan oleh DoD meski tidak disebut eksplisit di spec |
+| 4 | Perubahan file relevan? | ✅ PASS | 4 file baru di `extension/`, log, test results |
+| 5 | Test/check cukup? | ⚠️ PARTIAL | Static checks pass; manual browser test eksplisit tidak dijalankan (dicatat Codex) |
+| 6 | Risiko security? | ✅ PASS | postMessage origin-locked; message source divalidasi di content script |
+| 7 | Risiko maintainability? | ✅ PASS | Fungsi kecil dan single-purpose; penamaan konstanta konsisten |
+| 8 | Risiko data integrity? | ✅ PASS | Hanya mapping `library_id → url` yang disimpan, bukan full response |
+| 9 | Risiko UX/performance? | ✅ PASS | `response.clone().text()` pada injected-fetch menghindari consuming original response |
+
+---
+
+## Verifikasi Definition of Done
+
+| DoD Item | Status | Bukti |
+|---|---|---|
+| `manifest.json` punya permission intercept network | ✅ | `"permissions": ["storage","webRequest"]` + `host_permissions` Facebook |
+| Background capture LP URL dari GraphQL | ✅ | Pipeline: injected-fetch → postMessage → content → background → `parseJsonSafely` → `walkGraphqlTree` |
+| LP URL disimpan di `chrome.storage.session` by `library_id` | ✅ | `storagePayload[libraryId] = destinationUrl; await chrome.storage.session.set(...)` |
+| Content script baca storage + attach ke record | ✅ | `getDestinationUrlForLibraryId()` + `attachDestinationUrlToRecord()` |
+| Manual scrape ≥9/10 iklan punya LP URL | ⚠️ | Tidak dijalankan — environment terminal tidak punya Chrome |
+
+---
+
+## Analisis Teknis
+
+### Pendekatan MV3 — Benar
+
+TASK-005 spec menawarkan dua opsi: `chrome.debugger` API atau fetch override via content script. Codex memilih opsi kedua (fetch override), yang merupakan pilihan **lebih baik** karena:
+- `chrome.debugger` membutuhkan permission tambahan dan menampilkan warning bar "Chrome is being debugged" di browser
+- Fetch override bersih, invisible ke user, dan lebih stabil untuk production
+
+Flow yang diimplementasi:
+```
+Meta halaman → window.fetch override (injected-fetch.js)
+  → POST /api/graphql/ terdeteksi
+  → response.clone().text()  ← tidak consuming original, aman
+  → window.postMessage({ targetOrigin: window.location.origin })  ← origin-locked
+  → content.js listener (event.source !== window guard)
+  → chrome.runtime.sendMessage ke background
+  → background: parseJsonSafely → walkGraphqlTree → chrome.storage.session.set
+```
+
+### Security — Benar
+
+| Properti | Implementasi | Risiko |
+|---|---|---|
+| postMessage targetOrigin | `window.location.origin` (bukan `"*"`) | Tidak bisa dibaca cross-origin frame ✓ |
+| Message validation | `event.source !== window` + type check | Halaman malicious tidak bisa spoof pesan ✓ |
+| Double-inject guard | `__ADS_LAB_FETCH_HOOK_INSTALLED__` flag | Script tidak diinjeksi dua kali ✓ |
+| Storage payload | Hanya `library_id → url` | Response GraphQL full tidak tersimpan ✓ |
+
+### Satu Catatan Minor (Tidak Memblokir)
+
+`observedGraphqlRequests` Map di background:
+```javascript
+const observedGraphqlRequests = new Map();
+```
+Entry ditambahkan saat `onBeforeRequest` terdeteksi, dihapus saat response diproses. Jika tab ditutup sebelum response diterima, entry bisa tertinggal. Tidak berbahaya — service worker MV3 di-terminate secara berkala sehingga Map di-reset otomatis, dan fungsinya hanya sebagai flag korelasi (`observedByWebRequest`), bukan penyimpanan data.
+
+### Manual Browser Test
+
+Codex secara eksplisit mencatat test ini tidak dijalankan dari terminal. Ini **acceptable** — test:
+```bash
+chrome.storage.session.get(null, (data) => console.log(Object.keys(data).length))
+```
+harus dijalankan secara manual oleh developer di Chrome Extension DevTools. Kode sudah wired dengan benar; hasilnya hanya bisa diverifikasi di browser.
+
+---
+
 # CLAUDE REVIEW — TASK-004
 
 **Tanggal Review**: 2026-05-08
