@@ -1673,3 +1673,86 @@ Output:
  M prototype_ui/index.html
  M prototype_ui/styles.css
 ```
+
+## 32. TASK-011 localStorage logic
+
+Command:
+```bash
+grep -n "localStorage" prototype_ui/app.js | wc -l
+```
+
+Output:
+```text
+5
+```
+
+## 33. TASK-011 threshold freshness
+
+Command:
+```bash
+grep -n -E "4.*jam|6.*jam|hours.*4|hours.*6" prototype_ui/app.js
+```
+
+Output:
+```text
+115:    fallback: "API fallback: fetch terjadwal tiap 4 jam, cached snapshot aktif. Banner kuning akan tampil otomatis bila timestamp sudah stale.",
+287:        diagnosis: "Ad aktif tetapi reach = 0 selama 6 jam terakhir.",
+724:  // < 4 jam normal, 4-6 jam warning, > 6 jam danger
+```
+
+## 34. TASK-011 app syntax
+
+Command:
+```bash
+node --check prototype_ui/app.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax valid setelah penambahan fallback dan stale banner.
+
+## 35. TASK-011 fallback and banner wiring
+
+Command:
+```bash
+rg -n "setStaleBanner|checkFreshness|readSnapshotFromCache|saveSnapshotToCache|buildDashboardErrorViewModel" prototype_ui/app.js prototype_ui/styles.css
+```
+
+Output:
+```text
+prototype_ui/app.js:486:function setStaleBanner(options) {
+prototype_ui/app.js:658:function saveSnapshotToCache(brand, rows, freshnessStatus) {
+prototype_ui/app.js:679:function readSnapshotFromCache(brand) {
+prototype_ui/app.js:712:function checkFreshness(timestamp, options) {
+prototype_ui/app.js:800:function buildDashboardErrorViewModel(brandKey, errorMessage) {
+prototype_ui/app.js:1442:  setStaleBanner(null);
+prototype_ui/app.js:1458:      setStaleBanner(null);
+prototype_ui/app.js:1477:      setStaleBanner({
+prototype_ui/app.js:1491:    const freshnessBanner = checkFreshness(freshnessTimestamp, { forceDanger: fetchFailed });
+prototype_ui/app.js:1493:    saveSnapshotToCache(state.brand, snapshotRows, freshnessStatus);
+prototype_ui/app.js:1494:    setStaleBanner(freshnessBanner);
+prototype_ui/app.js:1510:    const cachedSnapshot = readSnapshotFromCache(state.brand);
+prototype_ui/app.js:1522:      setStaleBanner(checkFreshness(cachedTimestamp, { forceDanger: true }));
+prototype_ui/app.js:1531:    applyDashboardViewModel(buildDashboardErrorViewModel(state.brand, error.message));
+prototype_ui/app.js:1532:    setStaleBanner({
+```
+
+## 36. TASK-011 self-review diff
+
+Command:
+```bash
+git diff -- prototype_ui/app.js prototype_ui/styles.css
+```
+
+Output:
+```text
+(diff output omitted here for brevity; reviewed locally during self-review)
+```
+
+Catatan:
+```text
+Self-review difokuskan pada 4 area: cache localStorage, threshold `4/6 jam`, fallback error path dengan cache, dan hidden/visible state banner pada section dashboard.
+```

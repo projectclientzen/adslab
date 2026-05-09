@@ -203,3 +203,33 @@
 - Hal yang perlu direview Claude nanti:
   - cek apakah transform KPI/alert untuk tiga brand sudah cukup representatif terhadap ekspektasi produk
   - cek apakah fallback saat `USE_REAL_DATA = true` tetapi helper Supabase mengembalikan data kosong sudah paling tepat untuk UX MVP
+
+## 2026-05-09 — TASK-011
+
+- Scope yang dikerjakan hanya `TASK-011`.
+- `PRD.md` tidak ada di repo, jadi referensi implementasi mengikuti `TASKS.md`, `ACCEPTANCE_CRITERIA.md`, dan addendum fallback dashboard di `ADS_LAB_PRD_v2 2.md`.
+- Memperbarui [prototype_ui/app.js](/Volumes/Daily Project/adslab/prototype_ui/app.js) untuk:
+  - menambahkan cache localStorage per brand dengan key `adslab_snapshot_{brand}`
+  - menyimpan snapshot terakhir setiap kali fetch Supabase berhasil
+  - menambahkan helper `checkFreshness()` dengan threshold `< 4 jam`, `4–6 jam`, dan `> 6 jam`
+  - membuat stale/error banner dinamis di bawah topbar tanpa perlu mengubah HTML statis
+  - menggunakan cache lokal jika fetch real gagal, lalu tetap menampilkan timestamp snapshot terakhir
+  - menampilkan error state yang eksplisit jika fetch real gagal dan cache lokal belum tersedia
+  - mendeteksi helper snapshot yang kembali ke mock fallback saat `USE_REAL_DATA = true`, lalu menganggapnya sebagai failure agar tidak diam-diam menampilkan mock sebagai data real
+- Memperbarui [prototype_ui/styles.css](/Volumes/Daily Project/adslab/prototype_ui/styles.css) untuk styling banner warning/danger di bawah topbar, termasuk state `hidden`.
+- Tidak ada file lain yang diubah di luar scope task ini.
+- Validasi dilakukan dengan grep `localStorage`, grep threshold freshness `4/6 jam`, `node --check`, grep helper fallback/banner wiring, dan self-review diff; detail output disimpan di `TEST_RESULTS.md`.
+- Self-review:
+  - DoD task tercapai: ada banner kuning, banner merah, localStorage fallback, timestamp terakhir, dan error state saat cache tidak ada
+  - implementasi sengaja menjaga banner hanya terlihat pada section `dashboard` agar overview/intelligence tidak ikut terdistraksi
+  - fallback sekarang lebih jujur: ketika helper Supabase mengembalikan mock di mode real-data, dashboard tidak lagi menganggapnya sukses
+- Asumsi implementasi:
+  - browser target mendukung `localStorage` dan aksesnya tidak diblokir oleh sandbox browser/user setting
+  - snapshot valid yang disimpan ke cache selalu memiliki `fetched_at` atau setidaknya `cached_at` untuk dipakai pada freshness message
+  - banner stale di bawah topbar cukup dibuat secara dinamis dari JavaScript tanpa perlu perubahan markup statis tambahan
+- Risiko tersisa:
+  - belum ada simulasi browser manual untuk memalsukan timestamp localStorage tua atau memblokir request Supabase secara live dari terminal ini
+  - helper `fetchLatestSnapshot()` di `supabaseClient.js` masih punya perilaku fallback internal ke mock, sehingga app.js perlu mendeteksi kondisi itu secara defensif
+- Hal yang perlu direview Claude nanti:
+  - cek apakah strategi mendeteksi `mock-fallback` dari helper sudah paling aman untuk membedakan error real vs data valid
+  - cek apakah error state tanpa cache sudah cukup jelas untuk operator, atau perlu treatment visual yang lebih kuat di iterasi berikutnya

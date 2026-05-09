@@ -424,9 +424,13 @@ const state = {
 
 const USE_REAL_DATA = Boolean(window.SUPABASE_URL);
 const DEFAULT_STATUS_TEXT = "Supabase fallback ready";
+const SNAPSHOT_CACHE_PREFIX = "adslab_snapshot_";
+const FRESH_WARNING_HOURS = 4;
+const FRESH_DANGER_HOURS = 6;
 const runtimeState = {
   dashboardRequestId: 0,
   intelligenceRequestId: 0,
+  dashboardBanner: null,
 };
 const brandTargets = {
   ngajigaes: { roas: 3, cpp: 45000 },
@@ -443,9 +447,19 @@ const funnelColors = {
 
 const pageSections = document.querySelectorAll(".page-section");
 const navLinks = document.querySelectorAll(".nav-link");
+const topbarElement = document.querySelector(".topbar");
 const topbarStatusPill = document.getElementById("topbar-status-pill");
 const topbarStatus = document.getElementById("topbar-status");
 const topbarFreshness = document.getElementById("topbar-freshness");
+const staleBanner = createStaleBanner();
+
+function createStaleBanner() {
+  const element = document.createElement("div");
+  element.className = "fallback-banner topbar-banner hidden";
+  element.setAttribute("hidden", "hidden");
+  topbarElement.insertAdjacentElement("afterend", element);
+  return element;
+}
 
 function setTopbarState(options) {
   const mode = options?.mode || "default";
@@ -467,6 +481,28 @@ function setTopbarState(options) {
 
   topbarFreshness.hidden = true;
   topbarFreshness.textContent = "";
+}
+
+function setStaleBanner(options) {
+  runtimeState.dashboardBanner = options || null;
+  renderStaleBanner();
+}
+
+function renderStaleBanner() {
+  const banner = runtimeState.dashboardBanner;
+
+  staleBanner.classList.remove("warning", "danger", "hidden");
+
+  if (!banner || state.section !== "dashboard") {
+    staleBanner.hidden = true;
+    staleBanner.classList.add("hidden");
+    staleBanner.textContent = "";
+    return;
+  }
+
+  staleBanner.hidden = false;
+  staleBanner.classList.add(banner.level === "danger" ? "danger" : "warning");
+  staleBanner.textContent = banner.message;
 }
 
 function getDateRangeForState() {
@@ -607,6 +643,102 @@ function formatDateTime(timestamp) {
   }).format(new Date(timestamp));
 }
 
+function getSnapshotCacheKey(brand) {
+  return `${SNAPSHOT_CACHE_PREFIX}${brand}`;
+}
+
+function canUseLocalStorage() {
+  try {
+    return typeof window.localStorage !== "undefined";
+  } catch (error) {
+    return false;
+  }
+}
+
+function saveSnapshotToCache(brand, rows, freshnessStatus) {
+  if (!canUseLocalStorage() || !Array.isArray(rows) || !rows.length) {
+    return;
+  }
+
+  const fetchedAt = freshnessStatus?.last_fetched_at || rows[0]?.fetched_at || new Date().toISOString();
+  const payload = {
+    brand: brand,
+    rows: rows,
+    fetched_at: fetchedAt,
+    cached_at: new Date().toISOString(),
+    freshness_status: freshnessStatus || null,
+  };
+
+  try {
+    window.localStorage.setItem(getSnapshotCacheKey(brand), JSON.stringify(payload));
+  } catch (error) {
+    console.warn("[ADS LAB] localStorage write skipped:", error.message);
+  }
+}
+
+function readSnapshotFromCache(brand) {
+  if (!canUseLocalStorage()) {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(getSnapshotCacheKey(brand));
+
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsedValue = JSON.parse(rawValue);
+    return Array.isArray(parsedValue?.rows) ? parsedValue : null;
+  } catch (error) {
+    console.warn("[ADS LAB] localStorage read skipped:", error.message);
+    return null;
+  }
+}
+
+function detectHelperMockRows(rows) {
+  return Array.isArray(rows) && rows.some((row) => row?.status === "mock-fallback");
+}
+
+function getAgeInHours(timestamp) {
+  if (!timestamp) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const diffMs = Date.now() - new Date(timestamp).getTime();
+  return Number.isFinite(diffMs) ? diffMs / 3600000 : Number.POSITIVE_INFINITY;
+}
+
+function checkFreshness(timestamp, options) {
+  const safeOptions = options || {};
+  const ageHours = getAgeInHours(timestamp);
+  const exactTime = formatDateTime(timestamp);
+
+  if (safeOptions.forceDanger) {
+    return {
+      level: "danger",
+      message: `Data mungkin tidak akurat — cek Ads Manager. Last valid snapshot ${formatRelativeTime(timestamp)} • ${exactTime}.`,
+    };
+  }
+
+  // < 4 jam normal, 4-6 jam warning, > 6 jam danger
+  if (ageHours < FRESH_WARNING_HOURS) {
+    return null;
+  }
+
+  if (ageHours <= FRESH_DANGER_HOURS) {
+    return {
+      level: "warning",
+      message: `Data dari ${formatRelativeTime(timestamp)} — sedang refresh. Last valid snapshot ${exactTime}.`,
+    };
+  }
+
+  return {
+    level: "danger",
+    message: `Data mungkin tidak akurat — cek Ads Manager. Last valid snapshot ${formatRelativeTime(timestamp)} • ${exactTime}.`,
+  };
+}
+
 function getMetricSummary(brandKey, rows) {
   const spend = sumMetric(rows, "spend");
   const reach = sumMetric(rows, "reach");
@@ -662,6 +794,37 @@ function buildDashboardViewModel(brandKey, rows, freshnessStatus) {
       ? `Scheduled snapshot aktif. Last updated ${formatRelativeTime(fetchedAt)} (${formatDateTime(fetchedAt)}).`
       : "Belum ada snapshot Supabase untuk brand ini pada range terpilih.",
     campaigns: buildCampaignGroups(brandKey, latestRows),
+  };
+}
+
+function buildDashboardErrorViewModel(brandKey, errorMessage) {
+  const template = dashboardData[brandKey];
+
+  return {
+    label: template.label,
+    range: state.range,
+    kpis: [
+      { label: "Snapshot Status", value: "Error", trend: "Fetch real gagal", chip: "Needs review" },
+      { label: "Last Attempt", value: "Gagal", trend: "Belum ada cache lokal", chip: "Supabase down" },
+      { label: "Fallback Source", value: "None", trend: "Gunakan cache browser jika tersedia", chip: "No cached row" },
+      { label: "Operator Action", value: "Cek logs", trend: "Lihat meta-fetch / fetch_status", chip: "Manual review" },
+    ],
+    secondary: [
+      { label: "CPM", value: "-", note: "Menunggu snapshot valid" },
+      { label: "CTR", value: "-", note: "Menunggu snapshot valid" },
+      { label: "Frequency", value: "-", note: "Menunggu snapshot valid" },
+      { label: "Reach", value: "-", note: errorMessage || "Snapshot gagal dimuat" },
+    ],
+    alerts: [
+      {
+        level: "danger",
+        title: "Snapshot real tidak tersedia",
+        diagnosis: errorMessage || "Supabase atau helper snapshot gagal merespons.",
+        action: "Periksa network, cek scheduled fetch, lalu refresh setelah sumber data pulih.",
+      },
+    ],
+    fallback: "Data real gagal dimuat dan cache lokal belum tersedia.",
+    campaigns: [],
   };
 }
 
@@ -1276,6 +1439,7 @@ async function renderDashboard() {
   const requestId = ++runtimeState.dashboardRequestId;
 
   window.ACTIVE_BRAND = state.brand;
+  setStaleBanner(null);
 
   if (USE_REAL_DATA) {
     renderDashboardLoading();
@@ -1291,10 +1455,16 @@ async function renderDashboard() {
   try {
     if (!USE_REAL_DATA || typeof window.fetchLatestSnapshot !== "function") {
       applyDashboardViewModel(dashboardData[state.brand]);
+      setStaleBanner(null);
       return;
     }
 
     const snapshotRows = await window.fetchLatestSnapshot(state.brand, getDateRangeForState());
+
+    if (detectHelperMockRows(snapshotRows)) {
+      throw new Error("Helper Supabase mengembalikan mock fallback saat mode data real aktif");
+    }
+
     const freshnessStatus = await fetchFreshnessStatus(state.brand);
 
     if (requestId !== runtimeState.dashboardRequestId) {
@@ -1304,6 +1474,10 @@ async function renderDashboard() {
     applyDashboardViewModel(buildDashboardViewModel(state.brand, snapshotRows, freshnessStatus));
 
     if (!snapshotRows.length) {
+      setStaleBanner({
+        level: "warning",
+        message: "Snapshot Supabase belum tersedia untuk range ini. Dashboard tetap hidup, tetapi belum ada data valid untuk dianalisis.",
+      });
       setTopbarState({
         mode: "warning",
         label: "Snapshot belum tersedia",
@@ -1314,6 +1488,10 @@ async function renderDashboard() {
 
     const freshnessTimestamp = freshnessStatus?.last_fetched_at || snapshotRows[0]?.fetched_at || null;
     const fetchFailed = freshnessStatus?.status === "error";
+    const freshnessBanner = checkFreshness(freshnessTimestamp, { forceDanger: fetchFailed });
+
+    saveSnapshotToCache(state.brand, snapshotRows, freshnessStatus);
+    setStaleBanner(freshnessBanner);
 
     setTopbarState({
       mode: fetchFailed ? "warning" : "default",
@@ -1329,11 +1507,36 @@ async function renderDashboard() {
       return;
     }
 
-    applyDashboardViewModel(dashboardData[state.brand]);
+    const cachedSnapshot = readSnapshotFromCache(state.brand);
+
+    if (cachedSnapshot?.rows?.length) {
+      const cachedTimestamp =
+        cachedSnapshot.fetched_at || cachedSnapshot.cached_at || cachedSnapshot.rows[0]?.fetched_at || null;
+
+      applyDashboardViewModel(
+        buildDashboardViewModel(state.brand, cachedSnapshot.rows, cachedSnapshot.freshness_status || {
+          last_fetched_at: cachedTimestamp,
+          status: "error",
+        }),
+      );
+      setStaleBanner(checkFreshness(cachedTimestamp, { forceDanger: true }));
+      setTopbarState({
+        mode: "warning",
+        label: "Using cached local snapshot",
+        freshnessText: `Snapshot real gagal dimuat. Cache lokal terakhir: ${formatDateTime(cachedTimestamp)}.`,
+      });
+      return;
+    }
+
+    applyDashboardViewModel(buildDashboardErrorViewModel(state.brand, error.message));
+    setStaleBanner({
+      level: "danger",
+      message: "Data mungkin tidak akurat — cek Ads Manager. Snapshot real gagal dimuat dan cache lokal belum tersedia.",
+    });
     setTopbarState({
       mode: "warning",
-      label: DEFAULT_STATUS_TEXT,
-      freshnessText: "Snapshot real gagal dimuat. Prototype kembali ke mock data.",
+      label: "No valid cached snapshot",
+      freshnessText: "Supabase gagal dimuat dan browser belum punya snapshot lokal untuk brand ini.",
     });
   }
 }
@@ -1542,6 +1745,7 @@ function bindNavigation() {
       pageSections.forEach((section) =>
         section.classList.toggle("active", section.id === state.section),
       );
+      renderStaleBanner();
     });
   });
 }

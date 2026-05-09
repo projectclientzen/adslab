@@ -585,6 +585,27 @@ body::before {
   background: rgba(255, 179, 71, 0.08);
 }
 
+.fallback-banner.hidden {
+  display: none;
+}
+
+.topbar-banner {
+  border-left: 4px solid var(--warning);
+}
+
+.fallback-banner.warning {
+  border-color: rgba(255, 179, 71, 0.28);
+  background: rgba(255, 179, 71, 0.08);
+  color: #ffdcb3;
+}
+
+.fallback-banner.danger {
+  border-color: rgba(245, 111, 111, 0.34);
+  border-left-color: var(--danger);
+  background: rgba(245, 111, 111, 0.1);
+  color: #ffd4d4;
+}
+
 .loading-shell {
   display: grid;
   gap: 14px;
