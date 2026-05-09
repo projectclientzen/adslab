@@ -170,3 +170,36 @@
 - Hal yang perlu direview Claude nanti:
   - pastikan syntax schedule `netlify.toml` sesuai ekspektasi deploy target Netlify project ini
   - sanity check apakah penggunaan `SUPABASE_ANON_KEY` sebagai fallback masih diterima untuk write ke `fetch_status`, atau harus dipaksa `SERVICE_ROLE_KEY`
+
+## 2026-05-09 — TASK-010
+
+- Scope yang dikerjakan hanya `TASK-010`.
+- `PRD.md` tidak ada di repo, jadi referensi implementasi mengikuti `TASKS.md`, `ACCEPTANCE_CRITERIA.md`, dan catatan fallback dashboard di `ADS_LAB_PRD_v2 2.md`.
+- Memperbarui [prototype_ui/app.js](/Volumes/Daily Project/adslab/prototype_ui/app.js) untuk:
+  - menambahkan flag `USE_REAL_DATA` berbasis `window.SUPABASE_URL`
+  - mempertahankan perilaku mock lama saat `USE_REAL_DATA = false`
+  - mengubah `renderDashboard()` dan `renderIntelligence()` menjadi async agar bisa membaca `fetchLatestSnapshot()` dan `fetchAdsIntelligence()` dari [prototype_ui/supabaseClient.js](/Volumes/Daily Project/adslab/prototype_ui/supabaseClient.js)
+  - mentransform row Supabase ke view model dashboard: KPI, secondary metrics, alerts, campaign/adset/ad breakdown, dan empty state jika snapshot belum tersedia
+  - membaca tabel `fetch_status` via `window.supabase` untuk menampilkan freshness indicator `Last updated X menit lalu` di topbar
+  - menambahkan loading skeleton untuk dashboard dan intelligence agar UI tidak blank saat fetch berlangsung
+- Memperbarui [prototype_ui/index.html](/Volumes/Daily Project/adslab/prototype_ui/index.html) dengan target DOM kecil untuk topbar freshness dan status text, tanpa mengubah struktur halaman utama.
+- Memperbarui [prototype_ui/styles.css](/Volumes/Daily Project/adslab/prototype_ui/styles.css) untuk:
+  - styling `topbar-freshness`
+  - variant status pill (`loading`, `warning`)
+  - loading skeleton shimmer
+- Tidak ada perubahan ke task lain; file prototype lain di luar scope ini tidak disentuh.
+- Validasi dilakukan dengan grep `USE_REAL_DATA`, grep loading markers, grep wiring helper Supabase/freshness, dan `node --check`; detail output disimpan di `TEST_RESULTS.md`.
+- Self-review:
+  - loading state dan freshness indicator sudah terpasang tanpa merombak struktur render utama
+  - mode mock tetap dipertahankan sebagai default path saat `SUPABASE_URL` tidak tersedia
+  - empty state untuk snapshot/ads detail dibuat eksplisit agar UI tidak blank ketika DB masih kosong
+- Asumsi implementasi:
+  - `supabaseClient.js` sudah termuat lebih dulu di `index.html` dan mengekspos `fetchLatestSnapshot` serta `fetchAdsIntelligence` ke `window`
+  - tabel `fetch_status` sudah ada dari `TASK-009` sehingga query freshness di topbar bisa berjalan saat Supabase terhubung
+  - range `Custom` sementara diperlakukan sama seperti range 30 hari karena task ini tidak mencakup UI date picker
+- Risiko tersisa:
+  - belum ada browser-run manual dari terminal ini, jadi render nyata di DOM hanya tervalidasi secara statik dan lewat syntax check
+  - transform data dashboard menggunakan heuristik agregasi dari snapshot terbaru; mapping KPI/alert mungkin perlu fine-tuning setelah melihat data Supabase asli
+- Hal yang perlu direview Claude nanti:
+  - cek apakah transform KPI/alert untuk tiga brand sudah cukup representatif terhadap ekspektasi produk
+  - cek apakah fallback saat `USE_REAL_DATA = true` tetapi helper Supabase mengembalikan data kosong sudah paling tepat untuk UX MVP

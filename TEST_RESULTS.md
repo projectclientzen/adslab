@@ -1561,6 +1561,115 @@ Output:
 -----------+-----------------+--------+---------------
  alaika    |                 |        | 
  labbaika  |                 |        | 
- ngajigaes |                 |        | 
+ngajigaes |                 |        | 
 (3 rows)
+```
+
+## 26. TASK-010 flag real-data
+
+Command:
+```bash
+grep -n "USE_REAL_DATA" prototype_ui/app.js
+```
+
+Output:
+```text
+425:const USE_REAL_DATA = Boolean(window.SUPABASE_URL);
+487:  if (!USE_REAL_DATA || !window.supabase) {
+1280:  if (USE_REAL_DATA) {
+1292:    if (!USE_REAL_DATA || typeof window.fetchLatestSnapshot !== "function") {
+1417:  if (USE_REAL_DATA) {
+1422:    if (!USE_REAL_DATA || typeof window.fetchAdsIntelligence !== "function") {
+```
+
+## 27. TASK-010 loading state markers
+
+Command:
+```bash
+grep -E "loading|skeleton|spinner" prototype_ui/app.js prototype_ui/styles.css | wc -l
+```
+
+Output:
+```text
+35
+```
+
+## 28. TASK-010 app syntax
+
+Command:
+```bash
+node --check prototype_ui/app.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax valid.
+
+## 29. TASK-010 script wiring
+
+Command:
+```bash
+grep -n "supabaseClient.js\|app.js" prototype_ui/index.html
+```
+
+Output:
+```text
+247:    <script src="./supabaseClient.js"></script>
+248:    <script src="./app.js"></script>
+```
+
+Command:
+```bash
+grep -n "fetchLatestSnapshot\|fetchAdsIntelligence\|fetch_status\|topbar-freshness" prototype_ui/app.js prototype_ui/index.html
+```
+
+Output:
+```text
+prototype_ui/app.js:448:const topbarFreshness = document.getElementById("topbar-freshness");
+prototype_ui/app.js:492:    .from("fetch_status")
+prototype_ui/app.js:498:    console.warn("[ADS LAB] fetch_status fallback:", result.error.message);
+prototype_ui/app.js:747:        action: "Tunggu scheduled fetch berikutnya atau cek konfigurasi `meta-fetch` dan `fetch_status`.",
+prototype_ui/app.js:1292:    if (!USE_REAL_DATA || typeof window.fetchLatestSnapshot !== "function") {
+prototype_ui/app.js:1297:    const snapshotRows = await window.fetchLatestSnapshot(state.brand, getDateRangeForState());
+prototype_ui/app.js:1422:    if (!USE_REAL_DATA || typeof window.fetchAdsIntelligence !== "function") {
+prototype_ui/app.js:1427:    const rows = await window.fetchAdsIntelligence({
+prototype_ui/index.html:65:            <p class="topbar-freshness" id="topbar-freshness" hidden></p>
+```
+
+## 30. TASK-010 working tree scope
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+ M prototype_ui/app.js
+ M prototype_ui/index.html
+ M prototype_ui/styles.css
+```
+
+Catatan:
+```text
+Pass TASK-010 ini mengubah tiga file prototype UI yang relevan dengan wiring data real, loading state, dan freshness indicator. Setelah section ini ditulis, dua file log wajib (`CODEX_IMPLEMENTATION_LOG.md` dan `TEST_RESULTS.md`) juga diperbarui sebagai deliverable task.
+```
+
+## 31. TASK-010 final working tree after log updates
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+ M CODEX_IMPLEMENTATION_LOG.md
+ M TEST_RESULTS.md
+ M prototype_ui/app.js
+ M prototype_ui/index.html
+ M prototype_ui/styles.css
 ```

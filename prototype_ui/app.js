@@ -422,6 +422,18 @@ const state = {
   selectedDomain: competitorDomains[0].domain,
 };
 
+const USE_REAL_DATA = Boolean(window.SUPABASE_URL);
+const DEFAULT_STATUS_TEXT = "Supabase fallback ready";
+const runtimeState = {
+  dashboardRequestId: 0,
+  intelligenceRequestId: 0,
+};
+const brandTargets = {
+  ngajigaes: { roas: 3, cpp: 45000 },
+  labbaika: { cpl: 80000 },
+  alaika: { cpl: 75000 },
+};
+
 const funnelColors = {
   LP: "#d8b35d",
   CTWA: "#84dba9",
@@ -431,6 +443,606 @@ const funnelColors = {
 
 const pageSections = document.querySelectorAll(".page-section");
 const navLinks = document.querySelectorAll(".nav-link");
+const topbarStatusPill = document.getElementById("topbar-status-pill");
+const topbarStatus = document.getElementById("topbar-status");
+const topbarFreshness = document.getElementById("topbar-freshness");
+
+function setTopbarState(options) {
+  const mode = options?.mode || "default";
+  const label = options?.label || DEFAULT_STATUS_TEXT;
+  const freshnessText = options?.freshnessText || "";
+
+  topbarStatusPill.classList.remove("loading", "warning", "neutral");
+  if (mode === "loading" || mode === "warning" || mode === "neutral") {
+    topbarStatusPill.classList.add(mode);
+  }
+
+  topbarStatus.textContent = label;
+
+  if (freshnessText) {
+    topbarFreshness.hidden = false;
+    topbarFreshness.textContent = freshnessText;
+    return;
+  }
+
+  topbarFreshness.hidden = true;
+  topbarFreshness.textContent = "";
+}
+
+function getDateRangeForState() {
+  const now = new Date();
+  const end = new Date(now);
+  const start = new Date(now);
+  const days = state.range === "7 hari" ? 7 : 30;
+
+  start.setDate(start.getDate() - (days - 1));
+
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+  };
+}
+
+async function fetchFreshnessStatus(brand) {
+  if (!USE_REAL_DATA || !window.supabase) {
+    return null;
+  }
+
+  const result = await window.supabase
+    .from("fetch_status")
+    .select("*")
+    .eq("brand", brand)
+    .maybeSingle();
+
+  if (result.error) {
+    console.warn("[ADS LAB] fetch_status fallback:", result.error.message);
+    return null;
+  }
+
+  return result.data || null;
+}
+
+function getLatestFetchedAt(rows) {
+  return rows.reduce((latest, row) => {
+    const current = row?.fetched_at ? new Date(row.fetched_at).getTime() : 0;
+    return current > latest ? current : latest;
+  }, 0);
+}
+
+function selectLatestSnapshotRows(rows) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return [];
+  }
+
+  const latestTimestamp = getLatestFetchedAt(rows);
+
+  if (!latestTimestamp) {
+    return rows.slice();
+  }
+
+  return rows.filter((row) => {
+    return row?.fetched_at && new Date(row.fetched_at).getTime() === latestTimestamp;
+  });
+}
+
+function sumMetric(rows, key) {
+  return rows.reduce((total, row) => total + toFiniteNumber(row[key]), 0);
+}
+
+function toFiniteNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function roundValue(value, precision) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  const factor = 10 ** precision;
+  return Math.round(value * factor) / factor;
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(Math.round(toFiniteNumber(value)));
+}
+
+function formatCompactNumber(value) {
+  return new Intl.NumberFormat("id-ID", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(toFiniteNumber(value));
+}
+
+function formatCount(value, suffix) {
+  return `${new Intl.NumberFormat("id-ID").format(Math.round(toFiniteNumber(value)))} ${suffix}`;
+}
+
+function formatPercent(value, digits) {
+  return `${roundValue(toFiniteNumber(value) * 100, digits).toFixed(digits)}%`;
+}
+
+function formatMultiplier(value) {
+  return `${roundValue(value, 1).toFixed(1)}x`;
+}
+
+function formatRelativeTime(timestamp) {
+  if (!timestamp) {
+    return "belum tersedia";
+  }
+
+  const diffMs = Date.now() - new Date(timestamp).getTime();
+
+  if (!Number.isFinite(diffMs)) {
+    return "belum tersedia";
+  }
+
+  const totalMinutes = Math.max(0, Math.round(diffMs / 60000));
+
+  if (totalMinutes < 60) {
+    return `${totalMinutes} menit lalu`;
+  }
+
+  const totalHours = Math.round(totalMinutes / 60);
+  if (totalHours < 24) {
+    return `${totalHours} jam lalu`;
+  }
+
+  const totalDays = Math.round(totalHours / 24);
+  return `${totalDays} hari lalu`;
+}
+
+function formatDateTime(timestamp) {
+  if (!timestamp) {
+    return "timestamp belum tersedia";
+  }
+
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(timestamp));
+}
+
+function getMetricSummary(brandKey, rows) {
+  const spend = sumMetric(rows, "spend");
+  const reach = sumMetric(rows, "reach");
+  const impressions = sumMetric(rows, "impressions");
+  const clicks = sumMetric(rows, "clicks");
+  const purchases = sumMetric(rows, "purchases");
+  const purchaseValue = sumMetric(rows, "purchase_value");
+  const leads = sumMetric(rows, "leads");
+  const ctr = impressions > 0 ? clicks / impressions : 0;
+  const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
+  const frequency = reach > 0 ? impressions / reach : 0;
+  const roas = spend > 0 ? purchaseValue / spend : 0;
+  const cpl = leads > 0 ? spend / leads : 0;
+  const cpp = purchases > 0 ? spend / purchases : 0;
+  const target = brandTargets[brandKey] || {};
+
+  return {
+    spend,
+    reach,
+    impressions,
+    clicks,
+    purchases,
+    purchaseValue,
+    leads,
+    ctr,
+    cpm,
+    frequency,
+    roas,
+    cpl,
+    cpp,
+    target,
+  };
+}
+
+function buildDashboardViewModel(brandKey, rows, freshnessStatus) {
+  const template = dashboardData[brandKey];
+  const latestRows = selectLatestSnapshotRows(rows);
+  const metrics = getMetricSummary(brandKey, latestRows);
+  const fetchedAt =
+    freshnessStatus?.last_fetched_at ||
+    latestRows[0]?.fetched_at ||
+    rows[0]?.fetched_at ||
+    null;
+  const hasRows = latestRows.length > 0;
+
+  return {
+    label: template.label,
+    range: state.range,
+    kpis: buildDashboardKpis(brandKey, metrics),
+    secondary: buildSecondaryMetrics(metrics),
+    alerts: buildDashboardAlerts(brandKey, metrics, hasRows),
+    fallback: hasRows
+      ? `Scheduled snapshot aktif. Last updated ${formatRelativeTime(fetchedAt)} (${formatDateTime(fetchedAt)}).`
+      : "Belum ada snapshot Supabase untuk brand ini pada range terpilih.",
+    campaigns: buildCampaignGroups(brandKey, latestRows),
+  };
+}
+
+function buildDashboardKpis(brandKey, metrics) {
+  if (brandKey === "ngajigaes") {
+    const profitRate =
+      metrics.purchaseValue > 0 ? (metrics.purchaseValue - metrics.spend) / metrics.purchaseValue : 0;
+
+    return [
+      {
+        label: "ROAS",
+        value: formatMultiplier(metrics.roas),
+        trend: `${metrics.roas >= metrics.target.roas ? "Di atas" : "Di bawah"} target ${formatMultiplier(metrics.target.roas)}`,
+        chip: `Target ${formatMultiplier(metrics.target.roas)}`,
+      },
+      {
+        label: "Cost / Purchase",
+        value: formatCurrency(metrics.cpp),
+        trend: `${metrics.purchases > 0 ? `${formatCount(metrics.purchases, "purchase")}` : "Belum ada purchase"}`,
+        chip: `Goal ${formatCurrency(metrics.target.cpp)}`,
+      },
+      {
+        label: "Profit Rate",
+        value: formatPercent(profitRate, 1),
+        trend: `${formatCurrency(metrics.purchaseValue - metrics.spend)} margin kotor`,
+        chip: "Value - Spend",
+      },
+      {
+        label: "Total Spend",
+        value: formatCurrency(metrics.spend),
+        trend: `${formatCompactNumber(metrics.impressions)} impressions`,
+        chip: "Snapshot current range",
+      },
+    ];
+  }
+
+  const targetCpl = metrics.target.cpl || 0;
+
+  return [
+    {
+      label: "CPL",
+      value: formatCurrency(metrics.cpl),
+      trend: `${metrics.cpl <= targetCpl ? "Lebih efisien" : "Di atas"} target ${formatCurrency(targetCpl)}`,
+      chip: `Target ${formatCurrency(targetCpl)}`,
+    },
+    {
+      label: "Total Leads",
+      value: new Intl.NumberFormat("id-ID").format(Math.round(metrics.leads)),
+      trend: `${formatCompactNumber(metrics.clicks)} clicks terukur`,
+      chip: "Current scheduled snapshot",
+    },
+    {
+      label: "Reach",
+      value: formatCompactNumber(metrics.reach),
+      trend: `${formatCompactNumber(metrics.impressions)} impressions`,
+      chip: "Audience delivered",
+    },
+    {
+      label: "Total Spend",
+      value: formatCurrency(metrics.spend),
+      trend: `${formatPercent(metrics.ctr, 1)} CTR rata-rata`,
+      chip: "Snapshot current range",
+    },
+  ];
+}
+
+function buildSecondaryMetrics(metrics) {
+  return [
+    { label: "CPM", value: formatCurrency(metrics.cpm), note: "Biaya per 1.000 impressions" },
+    { label: "CTR", value: formatPercent(metrics.ctr, 1), note: "Derived dari clicks/impressions" },
+    { label: "Frequency", value: roundValue(metrics.frequency, 1).toFixed(1), note: "Impressions per reach" },
+    { label: "Reach", value: formatCompactNumber(metrics.reach), note: "Jangkauan total pada snapshot terbaru" },
+  ];
+}
+
+function buildDashboardAlerts(brandKey, metrics, hasRows) {
+  if (!hasRows) {
+    return [
+      {
+        level: "warning",
+        title: "Snapshot belum tersedia",
+        diagnosis: "Supabase belum punya snapshot untuk brand atau range yang sedang dipilih.",
+        action: "Tunggu scheduled fetch berikutnya atau cek konfigurasi `meta-fetch` dan `fetch_status`.",
+      },
+    ];
+  }
+
+  const alerts = [];
+
+  if (brandKey === "ngajigaes") {
+    alerts.push(
+      metrics.roas >= metrics.target.roas
+        ? {
+            level: "success",
+            title: "ROAS on track",
+            diagnosis: `ROAS ${formatMultiplier(metrics.roas)} sudah memenuhi target utama brand ini.`,
+            action: "Pertahankan creative winner dan scale bertahap pada campaign dengan CPP terendah.",
+          }
+        : {
+            level: "danger",
+            title: "ROAS di bawah target",
+            diagnosis: `ROAS turun ke ${formatMultiplier(metrics.roas)} dan belum menyentuh target ${formatMultiplier(metrics.target.roas)}.`,
+            action: "Audit kombinasi audience + creative, lalu kurangi spend pada adset paling mahal.",
+          }
+    );
+  } else {
+    alerts.push(
+      metrics.cpl <= metrics.target.cpl
+        ? {
+            level: "success",
+            title: "Lead acquisition efisien",
+            diagnosis: `CPL ${formatCurrency(metrics.cpl)} masih sesuai target ${formatCurrency(metrics.target.cpl)}.`,
+            action: "Pertahankan adset paling stabil dan siapkan creative turunan untuk jaga volume leads.",
+          }
+        : {
+            level: "warning",
+            title: "CPL perlu diawasi",
+            diagnosis: `CPL ${formatCurrency(metrics.cpl)} sudah melewati target ${formatCurrency(metrics.target.cpl)}.`,
+            action: "Review audience overlap, periksa CPM, dan siapkan angle yang lebih broad.",
+          }
+    );
+  }
+
+  alerts.push(
+    metrics.frequency >= 2.8
+      ? {
+          level: "warning",
+          title: "Frequency mulai tinggi",
+          diagnosis: `Frequency ${roundValue(metrics.frequency, 1).toFixed(1)} mengindikasikan fatigue perlu dipantau.`,
+          action: "Segarkan hook utama dan siapkan rotasi creative untuk audience warm.",
+        }
+      : {
+          level: "success",
+          title: "Frequency masih sehat",
+          diagnosis: `Frequency ${roundValue(metrics.frequency, 1).toFixed(1)} masih memberi ruang delivery yang aman.`,
+          action: "Lanjutkan pengujian creative tanpa perlu throttle spend agresif.",
+        }
+  );
+
+  return alerts;
+}
+
+function buildCampaignGroups(brandKey, rows) {
+  const campaigns = new Map();
+
+  rows.forEach((row) => {
+    const campaignId = row.campaign_id || "unknown-campaign";
+    const campaignName = row.campaign_name || "Unknown Campaign";
+    const adsetKey = row.adset_id || row.adset_name || "unknown-adset";
+
+    if (!campaigns.has(campaignId)) {
+      campaigns.set(campaignId, {
+        id: campaignId,
+        name: campaignName,
+        rows: [],
+        adsets: new Map(),
+      });
+    }
+
+    const campaign = campaigns.get(campaignId);
+    campaign.rows.push(row);
+
+    if (!campaign.adsets.has(adsetKey)) {
+      campaign.adsets.set(adsetKey, {
+        name: row.adset_name || "Adset tanpa nama",
+        status: normalizeStatus(row.status),
+        rows: [],
+        ads: [],
+      });
+    }
+
+    const adset = campaign.adsets.get(adsetKey);
+    adset.rows.push(row);
+    adset.ads.push({
+      name: row.ad_name || "Ad tanpa nama",
+      status: normalizeAdLabel(row),
+      spend: formatCurrency(row.spend),
+      result: formatPrimaryResult(brandKey, row),
+      efficiency: formatRowEfficiency(brandKey, row),
+      reach: formatCompactNumber(row.reach),
+    });
+  });
+
+  return Array.from(campaigns.values())
+    .map((campaign) => {
+      const metrics = getMetricSummary(brandKey, campaign.rows);
+      return {
+        name: campaign.name,
+        status: "Active",
+        spend: formatCurrency(metrics.spend),
+        result: formatAggregateResult(brandKey, metrics),
+        efficiency: formatAggregateEfficiency(brandKey, metrics),
+        reach: formatCompactNumber(metrics.reach),
+        health: getHealthTone(brandKey, metrics),
+        healthLabel: getHealthLabel(brandKey, metrics),
+        adsets: Array.from(campaign.adsets.values()).map((adset) => {
+          const adsetMetrics = getMetricSummary(brandKey, adset.rows);
+          return {
+            name: adset.name,
+            status: adset.status,
+            spend: formatCurrency(adsetMetrics.spend),
+            result: formatAggregateResult(brandKey, adsetMetrics),
+            efficiency: formatAggregateEfficiency(brandKey, adsetMetrics),
+            reach: formatCompactNumber(adsetMetrics.reach),
+            ads: adset.ads,
+          };
+        }),
+      };
+    })
+    .sort((left, right) => {
+      return toFiniteNumber(right.spend?.replace(/[^\d]/g, "")) - toFiniteNumber(left.spend?.replace(/[^\d]/g, ""));
+    });
+}
+
+function normalizeStatus(status) {
+  if (!status) {
+    return "Active";
+  }
+
+  return String(status)
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function normalizeAdLabel(row) {
+  return row.status ? normalizeStatus(row.status) : row.level ? normalizeStatus(row.level) : "Ad";
+}
+
+function formatPrimaryResult(brandKey, row) {
+  if (brandKey === "ngajigaes") {
+    return formatCount(row.purchases, "purchase");
+  }
+
+  return formatCount(row.leads, "lead");
+}
+
+function formatAggregateResult(brandKey, metrics) {
+  if (brandKey === "ngajigaes") {
+    return formatCount(metrics.purchases, "purchase");
+  }
+
+  return formatCount(metrics.leads, "lead");
+}
+
+function formatRowEfficiency(brandKey, row) {
+  if (brandKey === "ngajigaes") {
+    return `CPP ${formatCurrency(row.cpp)}`;
+  }
+
+  return `CPL ${formatCurrency(row.cpl)}`;
+}
+
+function formatAggregateEfficiency(brandKey, metrics) {
+  if (brandKey === "ngajigaes") {
+    return `ROAS ${formatMultiplier(metrics.roas)}`;
+  }
+
+  return `CPL ${formatCurrency(metrics.cpl)}`;
+}
+
+function getHealthTone(brandKey, metrics) {
+  if (brandKey === "ngajigaes") {
+    if (metrics.roas >= metrics.target.roas) {
+      return "good";
+    }
+
+    return metrics.roas >= metrics.target.roas * 0.85 ? "caution" : "risk";
+  }
+
+  if (metrics.cpl <= metrics.target.cpl) {
+    return "good";
+  }
+
+  return metrics.cpl <= metrics.target.cpl * 1.15 ? "caution" : "risk";
+}
+
+function getHealthLabel(brandKey, metrics) {
+  const tone = getHealthTone(brandKey, metrics);
+
+  if (tone === "good") {
+    return "Hijau / on track";
+  }
+
+  if (tone === "caution") {
+    return "Kuning / monitor";
+  }
+
+  return "Merah / perlu aksi";
+}
+
+function getBaseIntelligenceCards() {
+  return state.funnel === "All"
+    ? intelligenceCards
+    : intelligenceCards.filter((card) => card.funnel === state.funnel);
+}
+
+function buildIntelligenceCards(rows) {
+  return rows.map((row) => {
+    const destinationDomain = extractDomain(row.destination_url);
+
+    return {
+      domain: destinationDomain || row.advertiser_name || "unknown-domain",
+      advertiser: row.advertiser_name || "Advertiser tidak tersedia",
+      funnel: row.funnel_type || "Unknown",
+      type: normalizeCreativeType(row.creative_type),
+      cta: row.cta_button || "CTA tidak tersedia",
+      active: `Aktif ${formatRelativeTime(row.date_active)}`,
+      copy: row.ad_copy || "Copy iklan tidak tersedia pada snapshot ini.",
+      note: destinationDomain
+        ? `Destination mengarah ke ${destinationDomain}.`
+        : "Destination URL belum tersimpan pada row ini.",
+    };
+  });
+}
+
+function extractDomain(url) {
+  if (!url) {
+    return "";
+  }
+
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch (error) {
+    return "";
+  }
+}
+
+function normalizeCreativeType(type) {
+  if (!type) {
+    return "Unknown";
+  }
+
+  return String(type)
+    .split(/[\s_-]+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function renderDashboardLoading() {
+  const loadingCard = `
+    <div class="loading-card loading-skeleton">
+      <span class="loading-line short"></span>
+      <span class="loading-line"></span>
+      <span class="loading-line medium"></span>
+    </div>
+  `;
+  const compactLoadingCard = `
+    <div class="loading-card compact loading-skeleton">
+      <span class="loading-line short"></span>
+      <span class="loading-line"></span>
+    </div>
+  `;
+
+  document.getElementById("kpi-grid").innerHTML = Array.from({ length: 4 }).map(() => loadingCard).join("");
+  document.getElementById("secondary-grid").innerHTML = Array.from({ length: 4 }).map(() => compactLoadingCard).join("");
+  document.getElementById("alert-list").innerHTML = Array.from({ length: 2 }).map(() => loadingCard).join("");
+  document.getElementById("campaign-table").innerHTML = `
+    <div class="loading-shell">
+      ${Array.from({ length: 2 }).map(() => loadingCard).join("")}
+    </div>
+  `;
+  document.getElementById("fallback-banner").textContent = "Loading scheduled snapshot dari Supabase...";
+}
+
+function renderIntelligenceLoading() {
+  const loadingCard = `
+    <div class="loading-card loading-skeleton">
+      <span class="loading-line short"></span>
+      <span class="loading-line"></span>
+      <span class="loading-line"></span>
+      <span class="loading-line medium"></span>
+    </div>
+  `;
+
+  document.getElementById("intelligence-summary").innerHTML = `
+    <div class="loading-shell columns-2">
+      ${Array.from({ length: 4 }).map(() => loadingCard).join("")}
+    </div>
+  `;
+  document.getElementById("intelligence-cards").innerHTML = Array.from({ length: 4 }).map(() => loadingCard).join("");
+}
 
 function renderOverview() {
   document.getElementById("hero-metrics").innerHTML = overviewStats
@@ -521,7 +1133,8 @@ function renderSwitchers() {
   brandSwitcher.querySelectorAll("button").forEach((button) => {
     button.addEventListener("click", () => {
       state.brand = button.dataset.brand;
-      renderDashboard();
+      window.ACTIVE_BRAND = state.brand;
+      void renderDashboard();
       renderSwitchers();
     });
   });
@@ -529,7 +1142,7 @@ function renderSwitchers() {
   rangeSwitcher.querySelectorAll("button").forEach((button) => {
     button.addEventListener("click", () => {
       state.range = button.dataset.range;
-      renderDashboard();
+      void renderDashboard();
       renderSwitchers();
     });
   });
@@ -537,14 +1150,20 @@ function renderSwitchers() {
   funnelFilter.querySelectorAll("button").forEach((button) => {
     button.addEventListener("click", () => {
       state.funnel = button.dataset.funnel;
-      renderIntelligence();
+      void renderIntelligence();
       renderSwitchers();
     });
   });
 }
 
-function renderDashboard() {
-  const brand = dashboardData[state.brand];
+function applyDashboardViewModel(brand) {
+  if (!brand.campaigns.length) {
+    document.getElementById("campaign-table").innerHTML = `
+      <div class="fallback-banner">
+        Belum ada data campaign untuk snapshot terbaru. Scheduled fetch berikutnya akan mengisi area ini.
+      </div>
+    `;
+  }
 
   document.getElementById("kpi-grid").innerHTML = brand.kpis
     .map(
@@ -587,62 +1206,64 @@ function renderDashboard() {
     )
     .join("");
 
-  document.getElementById("campaign-table").innerHTML = brand.campaigns
-    .map(
-      (campaign, index) => `
-        <div class="campaign-group ${index === 0 ? "open" : ""}">
-          <div class="campaign-head">
-            <div class="campaign-title">
-              <strong>${campaign.name}</strong>
-              <span>${brand.label} • ${campaign.status}</span>
+  if (brand.campaigns.length) {
+    document.getElementById("campaign-table").innerHTML = brand.campaigns
+      .map(
+        (campaign, index) => `
+          <div class="campaign-group ${index === 0 ? "open" : ""}">
+            <div class="campaign-head">
+              <div class="campaign-title">
+                <strong>${campaign.name}</strong>
+                <span>${brand.label} • ${campaign.status}</span>
+              </div>
+              <span>${campaign.spend}</span>
+              <span>${campaign.result}</span>
+              <span>${campaign.efficiency}</span>
+              <span>${campaign.reach}</span>
+              <span class="status-text ${campaign.health}">${campaign.healthLabel}</span>
+              <button class="campaign-toggle">Detail</button>
             </div>
-            <span>${campaign.spend}</span>
-            <span>${campaign.result}</span>
-            <span>${campaign.efficiency}</span>
-            <span>${campaign.reach}</span>
-            <span class="status-text ${campaign.health}">${campaign.healthLabel}</span>
-            <button class="campaign-toggle">Detail</button>
-          </div>
-          <div class="campaign-body">
-            ${campaign.adsets
-              .map(
-                (adset) => `
-                  <div class="adset-row">
-                    <div>
-                      <strong>${adset.name}</strong>
-                      <span>Adset • ${adset.status}</span>
+            <div class="campaign-body">
+              ${campaign.adsets
+                .map(
+                  (adset) => `
+                    <div class="adset-row">
+                      <div>
+                        <strong>${adset.name}</strong>
+                        <span>Adset • ${adset.status}</span>
+                      </div>
+                      <span>${adset.spend}</span>
+                      <span>${adset.result}</span>
+                      <span>${adset.efficiency}</span>
+                      <span>${adset.reach}</span>
+                      <span></span>
                     </div>
-                    <span>${adset.spend}</span>
-                    <span>${adset.result}</span>
-                    <span>${adset.efficiency}</span>
-                    <span>${adset.reach}</span>
-                    <span></span>
-                  </div>
-                  ${adset.ads
-                    .map(
-                      (ad) => `
-                        <div class="ad-row">
-                          <div>
-                            <strong>${ad.name}</strong>
-                            <span>Ad • ${ad.status}</span>
+                    ${adset.ads
+                      .map(
+                        (ad) => `
+                          <div class="ad-row">
+                            <div>
+                              <strong>${ad.name}</strong>
+                              <span>Ad • ${ad.status}</span>
+                            </div>
+                            <span>${ad.spend}</span>
+                            <span>${ad.result}</span>
+                            <span>${ad.efficiency}</span>
+                            <span>${ad.reach}</span>
+                            <span></span>
                           </div>
-                          <span>${ad.spend}</span>
-                          <span>${ad.result}</span>
-                          <span>${ad.efficiency}</span>
-                          <span>${ad.reach}</span>
-                          <span></span>
-                        </div>
-                      `,
-                    )
-                    .join("")}
-                `,
-              )
-              .join("")}
+                        `,
+                      )
+                      .join("")}
+                  `,
+                )
+                .join("")}
+            </div>
           </div>
-        </div>
-      `,
-    )
-    .join("");
+        `,
+      )
+      .join("");
+  }
 
   document.querySelectorAll(".campaign-toggle").forEach((button) => {
     button.addEventListener("click", () => {
@@ -651,26 +1272,89 @@ function renderDashboard() {
   });
 }
 
-function renderIntelligence() {
-  const cards =
-    state.funnel === "All"
-      ? intelligenceCards
-      : intelligenceCards.filter((card) => card.funnel === state.funnel);
+async function renderDashboard() {
+  const requestId = ++runtimeState.dashboardRequestId;
+
+  window.ACTIVE_BRAND = state.brand;
+
+  if (USE_REAL_DATA) {
+    renderDashboardLoading();
+    setTopbarState({
+      mode: "loading",
+      label: "Loading scheduled snapshot",
+      freshnessText: "Mengambil data terbaru dari Supabase...",
+    });
+  } else {
+    setTopbarState({ mode: "default", label: DEFAULT_STATUS_TEXT, freshnessText: "" });
+  }
+
+  try {
+    if (!USE_REAL_DATA || typeof window.fetchLatestSnapshot !== "function") {
+      applyDashboardViewModel(dashboardData[state.brand]);
+      return;
+    }
+
+    const snapshotRows = await window.fetchLatestSnapshot(state.brand, getDateRangeForState());
+    const freshnessStatus = await fetchFreshnessStatus(state.brand);
+
+    if (requestId !== runtimeState.dashboardRequestId) {
+      return;
+    }
+
+    applyDashboardViewModel(buildDashboardViewModel(state.brand, snapshotRows, freshnessStatus));
+
+    if (!snapshotRows.length) {
+      setTopbarState({
+        mode: "warning",
+        label: "Snapshot belum tersedia",
+        freshnessText: "Supabase terhubung, tetapi brand ini belum punya data pada range yang dipilih.",
+      });
+      return;
+    }
+
+    const freshnessTimestamp = freshnessStatus?.last_fetched_at || snapshotRows[0]?.fetched_at || null;
+    const fetchFailed = freshnessStatus?.status === "error";
+
+    setTopbarState({
+      mode: fetchFailed ? "warning" : "default",
+      label: fetchFailed ? "Scheduled fetch needs review" : "Scheduled snapshot live",
+      freshnessText: freshnessTimestamp
+        ? `Last updated ${formatRelativeTime(freshnessTimestamp)} • ${formatDateTime(freshnessTimestamp)}`
+        : "Last updated timestamp belum tersedia.",
+    });
+  } catch (error) {
+    console.warn("[ADS LAB] renderDashboard fallback:", error.message);
+
+    if (requestId !== runtimeState.dashboardRequestId) {
+      return;
+    }
+
+    applyDashboardViewModel(dashboardData[state.brand]);
+    setTopbarState({
+      mode: "warning",
+      label: DEFAULT_STATUS_TEXT,
+      freshnessText: "Snapshot real gagal dimuat. Prototype kembali ke mock data.",
+    });
+  }
+}
+
+function applyIntelligenceCards(cards) {
+  const safeCards = cards || [];
 
   document.getElementById("intelligence-summary").innerHTML = [
     {
       label: "Ads in current view",
-      value: cards.length,
+      value: safeCards.length,
       note: "Card view dengan quick signal per creative",
     },
     {
       label: "Top funnel type",
-      value: getTopFunnel(cards),
+      value: getTopFunnel(safeCards),
       note: "Pola funnel paling sering muncul di hasil filter",
     },
     {
       label: "Most common CTA",
-      value: getTopCTA(cards),
+      value: getTopCTA(safeCards),
       note: "CTA dominan untuk referensi call-to-action baru",
     },
     {
@@ -690,7 +1374,22 @@ function renderIntelligence() {
     )
     .join("");
 
-  document.getElementById("intelligence-cards").innerHTML = cards
+  if (!safeCards.length) {
+    document.getElementById("intelligence-cards").innerHTML = `
+      <article class="intel-card">
+        <div class="intel-meta">
+          <span class="badge neutral">No rows</span>
+          <span>Supabase belum mengembalikan ads_detail</span>
+        </div>
+        <h4>Belum ada data competitor intelligence</h4>
+        <p>Pastikan pipeline extension dan sinkronisasi Supabase sudah mengisi tabel ads_detail.</p>
+        <p class="feed-copy">UI tetap hidup, tetapi insight card akan kosong sampai data masuk.</p>
+      </article>
+    `;
+    return;
+  }
+
+  document.getElementById("intelligence-cards").innerHTML = safeCards
     .map(
       (card) => `
         <article class="intel-card">
@@ -710,6 +1409,40 @@ function renderIntelligence() {
       `,
     )
     .join("");
+}
+
+async function renderIntelligence() {
+  const requestId = ++runtimeState.intelligenceRequestId;
+
+  if (USE_REAL_DATA) {
+    renderIntelligenceLoading();
+  }
+
+  try {
+    if (!USE_REAL_DATA || typeof window.fetchAdsIntelligence !== "function") {
+      applyIntelligenceCards(getBaseIntelligenceCards());
+      return;
+    }
+
+    const rows = await window.fetchAdsIntelligence({
+      funnelType: state.funnel === "All" ? undefined : state.funnel,
+      limit: 24,
+    });
+
+    if (requestId !== runtimeState.intelligenceRequestId) {
+      return;
+    }
+
+    applyIntelligenceCards(buildIntelligenceCards(rows));
+  } catch (error) {
+    console.warn("[ADS LAB] renderIntelligence fallback:", error.message);
+
+    if (requestId !== runtimeState.intelligenceRequestId) {
+      return;
+    }
+
+    applyIntelligenceCards(getBaseIntelligenceCards());
+  }
 }
 
 function renderAnalysis() {
@@ -813,13 +1546,14 @@ function bindNavigation() {
   });
 }
 
-function init() {
+async function init() {
   renderOverview();
   renderSwitchers();
-  renderDashboard();
-  renderIntelligence();
   renderAnalysis();
   bindNavigation();
+  window.ACTIVE_BRAND = state.brand;
+
+  await Promise.all([renderDashboard(), renderIntelligence()]);
 }
 
-init();
+void init();

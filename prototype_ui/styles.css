@@ -227,6 +227,12 @@ body::before {
   font-size: clamp(1.6rem, 2vw, 2.2rem);
 }
 
+.topbar-freshness {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
 .topbar-actions {
   display: flex;
   align-items: center;
@@ -252,12 +258,45 @@ body::before {
   color: var(--mint);
 }
 
+.status-pill.loading {
+  border-color: rgba(216, 179, 93, 0.24);
+  background: rgba(216, 179, 93, 0.08);
+  color: var(--gold);
+}
+
+.status-pill.warning {
+  border-color: rgba(255, 179, 71, 0.22);
+  background: rgba(255, 179, 71, 0.08);
+  color: var(--warning);
+}
+
+.status-pill.neutral {
+  border-color: rgba(181, 172, 150, 0.2);
+  background: rgba(181, 172, 150, 0.08);
+  color: var(--muted);
+}
+
 .status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--mint);
   box-shadow: 0 0 14px rgba(143, 221, 177, 0.8);
+}
+
+.status-pill.loading .status-dot {
+  background: var(--gold);
+  box-shadow: 0 0 14px rgba(216, 179, 93, 0.8);
+}
+
+.status-pill.warning .status-dot {
+  background: var(--warning);
+  box-shadow: 0 0 14px rgba(255, 179, 71, 0.8);
+}
+
+.status-pill.neutral .status-dot {
+  background: var(--muted);
+  box-shadow: 0 0 14px rgba(181, 172, 150, 0.45);
 }
 
 .ghost-button {
@@ -546,6 +585,64 @@ body::before {
   background: rgba(255, 179, 71, 0.08);
 }
 
+.loading-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.loading-shell.columns-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.loading-card {
+  min-height: 118px;
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.loading-card.compact {
+  min-height: 94px;
+}
+
+.loading-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  color: transparent;
+}
+
+.loading-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+  animation: shimmer 1.25s infinite;
+}
+
+.loading-line {
+  display: block;
+  width: 100%;
+  height: 14px;
+  margin-bottom: 10px;
+  border-radius: 999px;
+}
+
+.loading-line.short {
+  width: 42%;
+}
+
+.loading-line.medium {
+  width: 68%;
+}
+
 .campaign-table {
   margin-top: 18px;
 }
@@ -806,6 +903,12 @@ body::before {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
   }
 }
 
