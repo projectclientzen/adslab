@@ -1,4 +1,6 @@
-#!/usr/bin/env bash
+codex exec \
+  --sandbox workspace-write \
+  "$(cat "$PROMPT_FILE")" | tee "$LOG_FILE"#!/usr/bin/env bash
 set -euo pipefail
 
 TASK_ID="${1:-}"
