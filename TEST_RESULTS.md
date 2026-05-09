@@ -1344,3 +1344,223 @@ Catatan:
 ```text
 Revisi TASK-008 hanya mengubah `netlify/functions/meta-fetch.js` dan menambahkan `supabase/migrations/003_add_snapshot_unique.sql`. File lain tidak disentuh dalam pass revisi ini.
 ```
+
+## 19. TASK-009 schedule config
+
+Command:
+```bash
+grep -n "schedule\|cron" netlify/functions/meta-fetch-scheduled.js netlify.toml
+```
+
+Output:
+```text
+netlify/functions/meta-fetch-scheduled.js:12:    "[meta-fetch-scheduled] started",
+netlify/functions/meta-fetch-scheduled.js:15:      schedule: SCHEDULE_EXPRESSION,
+netlify/functions/meta-fetch-scheduled.js:34:      "[meta-fetch-scheduled] completed",
+netlify/functions/meta-fetch-scheduled.js:50:        schedule: SCHEDULE_EXPRESSION,
+netlify/functions/meta-fetch-scheduled.js:73:        "[meta-fetch-scheduled] failed to persist fetch_status",
+netlify/functions/meta-fetch-scheduled.js:83:      "[meta-fetch-scheduled] failed",
+netlify/functions/meta-fetch-scheduled.js:87:        schedule: SCHEDULE_EXPRESSION,
+netlify/functions/meta-fetch-scheduled.js:99:        schedule: SCHEDULE_EXPRESSION,
+netlify.toml:7:[functions."meta-fetch-scheduled"]
+netlify.toml:8:  schedule = "0 */4 * * *"
+```
+
+## 20. TASK-009 fetch_status migration definition
+
+Command:
+```bash
+grep -n "fetch_status" supabase/migrations/*.sql
+```
+
+Output:
+```text
+supabase/migrations/004_create_fetch_status.sql:1:CREATE TABLE IF NOT EXISTS fetch_status (
+supabase/migrations/004_create_fetch_status.sql:9:INSERT INTO fetch_status (brand)
+```
+
+## 21. TASK-009 execution logging and status fields
+
+Command:
+```bash
+grep -n "console\.log\|console\.error\|started_at\|failed_at\|fetched_at" netlify/functions/meta-fetch-scheduled.js
+```
+
+Output:
+```text
+11:  console.log(
+14:      started_at: startedAt,
+29:    const statusRows = buildFetchStatusRows(payload.results, payload.fetched_at || startedAt);
+33:    console.log(
+36:        started_at: startedAt,
+37:        fetched_at: payload.fetched_at || startedAt,
+49:        started_at: startedAt,
+51:        fetched_at: payload.fetched_at || startedAt,
+62:        last_fetched_at: failedAt,
+72:      console.error(
+75:          started_at: startedAt,
+76:          failed_at: failedAt,
+82:    console.error(
+85:        started_at: startedAt,
+86:        failed_at: failedAt,
+97:        started_at: startedAt,
+98:        failed_at: failedAt,
+114:    fetched_at: parsedBody.fetched_at || null,
+127:      (brandResult && brandResult.fetched_at) || fallbackTimestamp || new Date().toISOString();
+131:      last_fetched_at: fetchedAt,
+```
+
+Command:
+```bash
+grep -n "last_fetched_at\|status\|error_message" netlify/functions/meta-fetch-scheduled.js supabase/migrations/004_create_fetch_status.sql
+```
+
+Output:
+```text
+netlify/functions/meta-fetch-scheduled.js:29:    const statusRows = buildFetchStatusRows(payload.results, payload.fetched_at || startedAt);
+netlify/functions/meta-fetch-scheduled.js:31:    await upsertFetchStatusRows(statusRows);
+netlify/functions/meta-fetch-scheduled.js:45:      statusCode: 200,
+netlify/functions/meta-fetch-scheduled.js:59:    const statusRows = BRANDS.map(function mapBrand(brand) {
+netlify/functions/meta-fetch-scheduled.js:62:        last_fetched_at: failedAt,
+netlify/functions/meta-fetch-scheduled.js:63:        status: "error",
+netlify/functions/meta-fetch-scheduled.js:64:        error_message: truncateError(error.message),
+netlify/functions/meta-fetch-scheduled.js:70:      await upsertFetchStatusRows(statusRows);
+netlify/functions/meta-fetch-scheduled.js:71:    } catch (statusError) {
+netlify/functions/meta-fetch-scheduled.js:73:        "[meta-fetch-scheduled] failed to persist fetch_status",
+netlify/functions/meta-fetch-scheduled.js:77:          error: statusError.message,
+netlify/functions/meta-fetch-scheduled.js:93:      statusCode: 500,
+netlify/functions/meta-fetch-scheduled.js:131:      last_fetched_at: fetchedAt,
+netlify/functions/meta-fetch-scheduled.js:132:      status: brandResult && brandResult.success ? "success" : "error",
+netlify/functions/meta-fetch-scheduled.js:133:      error_message:
+supabase/migrations/004_create_fetch_status.sql:1:CREATE TABLE IF NOT EXISTS fetch_status (
+supabase/migrations/004_create_fetch_status.sql:3:    last_fetched_at TIMESTAMPTZ,
+supabase/migrations/004_create_fetch_status.sql:4:    status TEXT CHECK (status IN ('success', 'error')),
+supabase/migrations/004_create_fetch_status.sql:5:    error_message TEXT,
+supabase/migrations/004_create_fetch_status.sql:9:INSERT INTO fetch_status (brand)
+```
+
+## 22. TASK-009 function syntax
+
+Command:
+```bash
+node --check netlify/functions/meta-fetch-scheduled.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax valid.
+
+Command:
+```bash
+node -e "const mod=require('./netlify/functions/meta-fetch-scheduled.js'); console.log(typeof mod.handler)"
+```
+
+Output:
+```text
+function
+```
+
+## 23. TASK-009 PostgreSQL validation database
+
+Command:
+```bash
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d postgres -c "DROP DATABASE IF EXISTS task009_validation_1555;"
+```
+
+Output:
+```text
+NOTICE:  database "task009_validation_1555" does not exist, skipping
+DROP DATABASE
+```
+
+Command:
+```bash
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d postgres -c "CREATE DATABASE task009_validation_1555;"
+```
+
+Output:
+```text
+CREATE DATABASE
+```
+
+## 24. TASK-009 apply migrations
+
+Command:
+```bash
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d task009_validation_1555 -v ON_ERROR_STOP=1 -f supabase/migrations/002_create_campaign_snapshots.sql
+```
+
+Output:
+```text
+CREATE EXTENSION
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+```
+
+Command:
+```bash
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d task009_validation_1555 -v ON_ERROR_STOP=1 -f supabase/migrations/003_add_snapshot_unique.sql
+```
+
+Output:
+```text
+UPDATE 0
+ALTER TABLE
+ALTER TABLE
+```
+
+Command:
+```bash
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d task009_validation_1555 -v ON_ERROR_STOP=1 -f supabase/migrations/004_create_fetch_status.sql
+```
+
+Output:
+```text
+CREATE TABLE
+INSERT 0 3
+```
+
+## 25. TASK-009 inspect fetch_status schema
+
+Command:
+```bash
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d task009_validation_1555 -c "\d fetch_status"
+```
+
+Output:
+```text
+                         Table "public.fetch_status"
+     Column      |           Type           | Collation | Nullable | Default 
+-----------------+--------------------------+-----------+----------+---------
+ brand           | text                     |           | not null | 
+ last_fetched_at | timestamp with time zone |           |          | 
+ status          | text                     |           |          | 
+ error_message   | text                     |           |          | 
+ updated_at      | timestamp with time zone |           | not null | now()
+Indexes:
+    "fetch_status_pkey" PRIMARY KEY, btree (brand)
+Check constraints:
+    "fetch_status_brand_check" CHECK (brand = ANY (ARRAY['ngajigaes'::text, 'labbaika'::text, 'alaika'::text]))
+    "fetch_status_status_check" CHECK (status = ANY (ARRAY['success'::text, 'error'::text]))
+```
+
+Command:
+```bash
+psql --no-psqlrc -h /private/tmp/adslab_pg_socket_rev -d task009_validation_1555 -c "SELECT brand, last_fetched_at, status, error_message FROM fetch_status ORDER BY brand;"
+```
+
+Output:
+```text
+   brand   | last_fetched_at | status | error_message 
+-----------+-----------------+--------+---------------
+ alaika    |                 |        | 
+ labbaika  |                 |        | 
+ ngajigaes |                 |        | 
+(3 rows)
+```

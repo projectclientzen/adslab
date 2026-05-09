@@ -4,6 +4,9 @@
 [functions]
   directory = "netlify/functions"
 
+[functions."meta-fetch-scheduled"]
+  schedule = "0 */4 * * *"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

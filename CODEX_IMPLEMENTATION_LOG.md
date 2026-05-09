@@ -139,3 +139,20 @@
   - `adset_id` dan `ad_id` dinormalisasi menjadi string kosong saat tidak ada nilai, lalu migration mengubah kedua kolom itu menjadi `NOT NULL DEFAULT ''` agar conflict key stabil di PostgreSQL 14
   - fallback `replaceSnapshotsForBrand()` yang sebelumnya melakukan `DELETE seluruh brand -> INSERT` dihapus untuk menghindari kehilangan data historis jika insert gagal
   - check command tambahan dari Claude dijalankan ulang, termasuk validasi migration revisi pada PostgreSQL lokal
+
+## 2026-05-09 — TASK-009
+
+- Scope yang dikerjakan hanya `TASK-009`.
+- `PRD.md` tidak ada di repo, jadi referensi implementasi mengikuti `TASKS.md`, `ACCEPTANCE_CRITERIA.md`, dan catatan scheduled fetch di `ADS_LAB_PRD_v2 2.md`.
+- Menambahkan wrapper scheduled [netlify/functions/meta-fetch-scheduled.js](/Volumes/Daily Project/adslab/netlify/functions/meta-fetch-scheduled.js) untuk:
+  - menjalankan logika [netlify/functions/meta-fetch.js](/Volumes/Daily Project/adslab/netlify/functions/meta-fetch.js) setiap kali job scheduler memicu function
+  - menulis log start, completion, dan failure dengan timestamp lewat `console.log` / `console.error`
+  - membangun payload `fetch_status` per brand berdasarkan hasil `meta-fetch`
+  - melakukan upsert ke tabel `fetch_status` via Supabase REST `on_conflict=brand`
+- Menambahkan migration [supabase/migrations/004_create_fetch_status.sql](/Volumes/Daily Project/adslab/supabase/migrations/004_create_fetch_status.sql) untuk:
+  - membuat tabel `fetch_status` dengan kolom `brand`, `last_fetched_at`, `status`, `error_message`, dan `updated_at`
+  - menjadikan `brand` sebagai primary key dengan check constraint 3 brand yang didukung
+  - melakukan seed 3 baris awal (`ngajigaes`, `labbaika`, `alaika`) agar freshness indicator dashboard punya row tetap
+- Memperbarui [netlify.toml](/Volumes/Daily Project/adslab/netlify.toml) dengan schedule `0 */4 * * *` untuk function `meta-fetch-scheduled`.
+- Tidak ada perubahan ke task lain; file `meta-fetch.js` existing tidak diubah dalam task ini.
+- Validasi dilakukan dengan grep schedule/fetch_status, `node --check`, import sanity check, dan apply migration ke PostgreSQL lokal; detail output disimpan di `TEST_RESULTS.md`.
