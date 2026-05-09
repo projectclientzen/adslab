@@ -156,3 +156,17 @@
 - Memperbarui [netlify.toml](/Volumes/Daily Project/adslab/netlify.toml) dengan schedule `0 */4 * * *` untuk function `meta-fetch-scheduled`.
 - Tidak ada perubahan ke task lain; file `meta-fetch.js` existing tidak diubah dalam task ini.
 - Validasi dilakukan dengan grep schedule/fetch_status, `node --check`, import sanity check, dan apply migration ke PostgreSQL lokal; detail output disimpan di `TEST_RESULTS.md`.
+- Self-review:
+  - scheduled wrapper sudah memenuhi DoD task: ada cron 4 jam, update `fetch_status`, dan log execution timestamp
+  - wrapper sengaja memanggil `meta-fetch.js` sebagai source of truth agar logic fetch Meta tidak terduplikasi
+  - error global pada level wrapper saat `meta-fetch` gagal total masih ditulis sebagai status `error` untuk semua brand agar dashboard freshness tetap punya sinyal kegagalan
+- Asumsi implementasi:
+  - Netlify akan membaca schedule dari `[functions."meta-fetch-scheduled"]` di `netlify.toml`
+  - environment runtime menyediakan `fetch`, `SUPABASE_URL`, dan salah satu dari `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_ANON_KEY`
+  - tabel `fetch_status` dipakai sebagai single-row-per-brand status table, bukan execution history table
+- Risiko tersisa:
+  - belum ada invoke end-to-end ke Netlify runtime nyata atau request sungguhan ke Supabase REST dalam environment ini
+  - bila nanti dibutuhkan audit log historis per run, schema `fetch_status` perlu ditambah table terpisah karena saat ini hanya menyimpan status terbaru per brand
+- Hal yang perlu direview Claude nanti:
+  - pastikan syntax schedule `netlify.toml` sesuai ekspektasi deploy target Netlify project ini
+  - sanity check apakah penggunaan `SUPABASE_ANON_KEY` sebagai fallback masih diterima untuk write ke `fetch_status`, atau harus dipaksa `SERVICE_ROLE_KEY`

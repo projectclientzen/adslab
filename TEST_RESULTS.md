@@ -1540,9 +1540,9 @@ Output:
 -----------------+--------------------------+-----------+----------+---------
  brand           | text                     |           | not null | 
  last_fetched_at | timestamp with time zone |           |          | 
- status          | text                     |           |          | 
- error_message   | text                     |           |          | 
- updated_at      | timestamp with time zone |           | not null | now()
+     status          | text                     |           |          | 
+     error_message   | text                     |           |          | 
+     updated_at      | timestamp with time zone |           | not null | now()
 Indexes:
     "fetch_status_pkey" PRIMARY KEY, btree (brand)
 Check constraints:
