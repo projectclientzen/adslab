@@ -281,3 +281,17 @@
   - DoD TASK-010 tetap terpenuhi: `USE_REAL_DATA` ada, loading state tetap ada, fetch helper Supabase tetap ter-wire, dan freshness timestamp masih punya target DOM + query `fetch_status`
   - guard `isSupabaseClientReady()` hanya menutup gap fallback saat client belum siap; jalur real-data yang sudah ada tidak dirombak
   - tidak ditemukan blocker besar yang mengharuskan status `BLOCKED`
+
+## Self-review TASK-011
+
+- Status: PASS
+- Scope yang direview tetap hanya `TASK-011`.
+- Hasil review:
+  - logika fallback `localStorage` per brand masih aktif dan terpakai pada jalur error real-data
+  - threshold freshness `< 4 jam`, `4–6 jam`, dan `> 6 jam` tetap ada di `checkFreshness()`
+  - stale banner warning/danger tetap dirender di bawah topbar dan hanya aktif pada section dashboard
+  - error state dashboard tetap eksplisit saat fetch gagal dan cache lokal belum tersedia, jadi UI tidak blank/broken
+- Keputusan implementasi:
+  - tidak ada patch fungsional tambahan untuk `prototype_ui/app.js` atau `prototype_ui/styles.css` karena DoD `TASK-011` sudah terpenuhi pada state code sekarang
+  - tidak ditemukan risiko besar yang mengharuskan status `BLOCKED`
+- Validasi self-review disimpan di `TEST_RESULTS.md`.

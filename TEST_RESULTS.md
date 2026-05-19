@@ -2013,3 +2013,91 @@ Catatan:
 ```text
 Self-review ketat tidak menemukan blocker besar untuk TASK-010. Setelah `node --check`, syntax tetap valid; marker loading masih jauh di atas minimum DoD; dan working tree akhir hanya berubah pada dua file log yang memang diperbarui untuk dokumentasi verifikasi ini.
 ```
+
+## 50. TASK-011 re-check localStorage logic
+
+Command:
+```bash
+grep "localStorage" prototype_ui/app.js | wc -l
+```
+
+Output:
+```text
+5
+```
+
+## 51. TASK-011 re-check threshold freshness
+
+Command:
+```bash
+grep -n -E "4.*jam|6.*jam|hours.*4|hours.*6" prototype_ui/app.js
+```
+
+Output:
+```text
+115:    fallback: "API fallback: fetch terjadwal tiap 4 jam, cached snapshot aktif. Banner kuning akan tampil otomatis bila timestamp sudah stale.",
+287:        diagnosis: "Ad aktif tetapi reach = 0 selama 6 jam terakhir.",
+741:  // < 4 jam normal, 4-6 jam warning, > 6 jam danger
+```
+
+## 52. TASK-011 re-check syntax
+
+Command:
+```bash
+node --check prototype_ui/app.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax tetap valid.
+
+## 53. TASK-011 re-check fallback and error-state wiring
+
+Command:
+```bash
+rg -n "localStorage|checkFreshness|setStaleBanner|buildDashboardErrorViewModel|Using cached local snapshot|Snapshot real gagal dimuat" prototype_ui/app.js
+```
+
+Output:
+```text
+499:function setStaleBanner(options) {
+669:    return typeof window.localStorage !== "undefined";
+690:    window.localStorage.setItem(getSnapshotCacheKey(brand), JSON.stringify(payload));
+692:    console.warn("[ADS LAB] localStorage write skipped:", error.message);
+702:    const rawValue = window.localStorage.getItem(getSnapshotCacheKey(brand));
+711:    console.warn("[ADS LAB] localStorage read skipped:", error.message);
+729:function checkFreshness(timestamp, options) {
+930:function buildDashboardErrorViewModel(brandKey, errorMessage) {
+1687:  setStaleBanner(null);
+1703:      setStaleBanner(null);
+1709:      setStaleBanner(null);
+1738:      setStaleBanner({
+1752:    const freshnessBanner = checkFreshness(freshnessTimestamp, { forceDanger: fetchFailed });
+1755:    setStaleBanner(freshnessBanner);
+1783:      setStaleBanner(checkFreshness(cachedTimestamp, { forceDanger: true }));
+1786:        label: "Using cached local snapshot",
+1787:        freshnessText: `Snapshot real gagal dimuat. Cache lokal terakhir: ${formatDateTime(cachedTimestamp)}.`,
+1792:    applyDashboardViewModel(buildDashboardErrorViewModel(state.brand, error.message));
+1793:    setStaleBanner({
+1795:      message: "Data mungkin tidak akurat — cek Ads Manager. Snapshot real gagal dimuat dan cache lokal belum tersedia.",
+```
+
+## 54. TASK-011 re-check working tree before log update
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan:
+```text
+Sebelum penulisan self-review ini, working tree bersih dan tidak ada perubahan fungsional tambahan yang diperlukan untuk TASK-011.
+```
