@@ -295,3 +295,21 @@
   - tidak ada patch fungsional tambahan untuk `prototype_ui/app.js` atau `prototype_ui/styles.css` karena DoD `TASK-011` sudah terpenuhi pada state code sekarang
   - tidak ditemukan risiko besar yang mengharuskan status `BLOCKED`
 - Validasi self-review disimpan di `TEST_RESULTS.md`.
+
+## Self-review TASK-012
+
+- Status: PASS
+- Scope yang direview tetap hanya `TASK-012`.
+- Hasil review:
+  - `window.IS_ADMIN` diturunkan dari URL param `?admin=1` dan dipakai langsung untuk membedakan admin vs read-only mode
+  - target KPI existing dibaca dari `campaign_kpi_targets` lewat `fetchKpiTargetsForBrand()` saat mode real-data aktif
+  - save path ke Supabase tetap lewat helper `saveKpiTarget()` dengan update state lokal agar UI langsung merefleksikan perubahan
+  - kalkulasi status campaign tetap dinamis lewat `getStatus(actual, target, metric)` sesuai rumus task
+  - tanpa `?admin=1`, `renderKpiConfig()` hanya merender target label dan note, tanpa tombol edit
+- Keputusan implementasi:
+  - tidak ada patch fungsional tambahan untuk `prototype_ui/app.js`, `prototype_ui/index.html`, atau `prototype_ui/styles.css` karena DoD `TASK-012` sudah terpenuhi pada state code sekarang
+  - tidak ditemukan risiko besar yang mengharuskan status `BLOCKED`
+- Risiko tersisa:
+  - belum ada browser-run manual untuk memverifikasi perbedaan visual `?admin=1` vs mode biasa dari terminal ini
+  - model MVP ini masih mengasumsikan satu metric utama per brand saat menampilkan target default
+- Validasi self-review disimpan di `TEST_RESULTS.md`.

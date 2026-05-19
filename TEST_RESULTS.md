@@ -2101,3 +2101,114 @@ Catatan:
 ```text
 Sebelum penulisan self-review ini, working tree bersih dan tidak ada perubahan fungsional tambahan yang diperlukan untuk TASK-011.
 ```
+
+## 55. TASK-012 re-check admin flag
+
+Command:
+```bash
+grep "IS_ADMIN\|admin=1\|admin.*param" prototype_ui/app.js | wc -l
+```
+
+Output:
+```text
+4
+```
+
+## 56. TASK-012 re-check status ratio logic
+
+Command:
+```bash
+grep "getStatus\|ratio\|good.*caution\|caution.*risk" prototype_ui/app.js | wc -l
+```
+
+Output:
+```text
+5
+```
+
+## 57. TASK-012 re-check app syntax
+
+Command:
+```bash
+node --check prototype_ui/app.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax tetap valid.
+
+## 58. TASK-012 re-check save and edit wiring
+
+Command:
+```bash
+rg -n "saveCampaignTargetValue|fetchKpiTargetsForBrand|data-edit-kpi|data-save-kpi|kpi-config|window.IS_ADMIN|campaign_kpi_targets" prototype_ui/app.js prototype_ui/styles.css
+```
+
+Output:
+```text
+prototype_ui/styles.css:718:.kpi-config-display,
+prototype_ui/styles.css:719:.kpi-config-editor {
+prototype_ui/styles.css:724:.kpi-config-note,
+prototype_ui/styles.css:725:.kpi-config-label {
+prototype_ui/styles.css:730:.kpi-config-input {
+prototype_ui/styles.css:740:.kpi-config-input:focus {
+prototype_ui/styles.css:746:.kpi-config-actions {
+prototype_ui/app.js:452:window.IS_ADMIN = IS_ADMIN;
+prototype_ui/app.js:763:async function fetchKpiTargetsForBrand(brand) {
+prototype_ui/app.js:769:    .from("campaign_kpi_targets")
+prototype_ui/app.js:774:    console.warn("[ADS LAB] campaign_kpi_targets fallback:", result.error.message);
+prototype_ui/app.js:844:async function saveCampaignTargetValue(campaignId, kpiType, value) {
+prototype_ui/app.js:1362:      <div class="kpi-config-display">
+prototype_ui/app.js:1364:        <span class="kpi-config-note">${campaign.targetMeta}</span>
+prototype_ui/app.js:1373:      <div class="kpi-config-editor">
+prototype_ui/app.js:1374:        <label class="kpi-config-label" for="kpi-target-${campaign.id}">${metricLabel} target</label>
+prototype_ui/app.js:1376:          class="kpi-config-input"
+prototype_ui/app.js:1383:        <div class="kpi-config-actions">
+prototype_ui/app.js:1384:          <button class="campaign-toggle kpi-save-button" data-save-kpi="${campaign.id}" data-kpi-type="${campaign.metricType}" ${isSaving ? "disabled" : ""}>
+prototype_ui/app.js:1396:    <div class="kpi-config-display">
+prototype_ui/app.js:1398:      <span class="kpi-config-note">${campaign.targetMeta}</span>
+prototype_ui/app.js:1399:      <button class="campaign-toggle kpi-edit-button" data-edit-kpi="${campaign.id}" aria-label="Edit KPI target">
+prototype_ui/app.js:1407:  document.querySelectorAll("[data-edit-kpi]").forEach((button) => {
+prototype_ui/app.js:1427:  document.querySelectorAll("[data-save-kpi]").forEach((button) => {
+prototype_ui/app.js:1436:        await saveCampaignTargetValue(campaignId, metricType, runtimeState.draftTargetValue);
+prototype_ui/app.js:1439:        console.warn("[ADS LAB] saveCampaignTargetValue fallback:", error.message);
+prototype_ui/app.js:1728:      await fetchKpiTargetsForBrand(state.brand),
+```
+
+## 59. TASK-012 re-check read-only and status wiring
+
+Command:
+```bash
+sed -n '1350,1448p' prototype_ui/app.js
+sed -n '1238,1255p' prototype_ui/app.js
+```
+
+Output:
+```text
+(output reviewed locally; confirms `if (!IS_ADMIN)` branch renders display-only KPI target and `getHealthTone()` delegates to `getStatus(...)`)
+```
+
+Catatan:
+```text
+Self-review ketat tidak menemukan blocker besar untuk TASK-012. Jalur admin, read-only, save target, dan kalkulasi status sudah terhubung; karena itu tidak diperlukan patch fungsional tambahan pada pass ini.
+```
+
+## 60. TASK-012 re-check working tree before log update
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan:
+```text
+Sebelum penulisan self-review TASK-012 ini, working tree bersih dan tidak ada perubahan fungsional tambahan yang diperlukan.
+```
