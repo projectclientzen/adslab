@@ -2212,3 +2212,123 @@ Catatan:
 ```text
 Sebelum penulisan self-review TASK-012 ini, working tree bersih dan tidak ada perubahan fungsional tambahan yang diperlukan.
 ```
+
+## 61. TASK-013 alert type definitions
+
+Command:
+```bash
+grep -E "budget_warning|cpl_anomaly|roas_drop|no_delivery|ad_fatigue|failed_test|winning_ad" prototype_ui/alertEngine.js | wc -l
+```
+
+Output:
+```text
+14
+```
+
+## 62. TASK-013 pure engine guard
+
+Command:
+```bash
+grep -E "fetch|document\.|window\." prototype_ui/alertEngine.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: command exit code `1` karena memang tidak ada match, sesuai ekspektasi pure function module.
+
+## 63. TASK-013 alert engine syntax
+
+Command:
+```bash
+node --check prototype_ui/alertEngine.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax valid.
+
+## 64. TASK-013 app syntax
+
+Command:
+```bash
+node --check prototype_ui/app.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi integrasi di `app.js` valid.
+
+## 65. TASK-013 wiring check
+
+Command:
+```bash
+rg -n "runAlertEngine|alertEngine|buildDashboardAlerts|alert-list" prototype_ui/app.js prototype_ui/index.html prototype_ui/alertEngine.js
+```
+
+Output:
+```text
+prototype_ui/alertEngine.js:356:function runAlertEngine(input) {
+prototype_ui/alertEngine.js:386:    runAlertEngine: runAlertEngine,
+prototype_ui/index.html:154:              <div class="alert-list" id="alert-list"></div>
+prototype_ui/index.html:248:    <script src="./alertEngine.js"></script>
+prototype_ui/app.js:451:const alertEngineSettings = {
+prototype_ui/app.js:935:    alerts: buildDashboardAlerts(brandKey, latestRows, metrics, hasRows),
+prototype_ui/app.js:1202:    settings: alertEngineSettings,
+prototype_ui/app.js:1207:function buildDashboardAlerts(brandKey, rows, metrics, hasRows) {
+prototype_ui/app.js:1219:  if (typeof runAlertEngine !== "function") {
+prototype_ui/app.js:1223:  const alerts = runAlertEngine(buildAlertEngineInput(brandKey, rows));
+prototype_ui/app.js:1456:  document.getElementById("alert-list").innerHTML = Array.from({ length: 2 }).map(() => loadingCard).join("");
+prototype_ui/app.js:1728:  document.getElementById("alert-list").innerHTML = brand.alerts
+```
+
+## 66. TASK-013 mock-style console path sample
+
+Command:
+```bash
+node -e "const { runAlertEngine } = require('./prototype_ui/alertEngine.js'); const sample = { label: 'Ngajigaes.id', kpis: [{ chip: 'Target 3.0x' }], campaigns: [{ name: 'Ramadan Conversion Burst', status: 'Active', spend: 'Rp 48jt', result: '367 purchases', efficiency: 'ROAS 3.4x', reach: '154k' }, { name: 'Warm Audience Bundle', status: 'Active', spend: 'Rp 12jt', result: '0 purchases', efficiency: 'Freq 3.2', reach: '0', hours_without_delivery: 7, total_budget: 50000000, remaining_budget: 8000000, roas_history: [2.6, 2.4], target_value: 3.0 }] }; const alerts = runAlertEngine(sample); console.log(alerts.map((item) => item.type).join(','));"
+```
+
+Output:
+```text
+budget_warning,roas_drop,no_delivery,ad_fatigue,failed_test,winning_ad
+```
+
+## 67. TASK-013 all seven alert types synthetic trigger
+
+Command:
+```bash
+node -e "const { runAlertEngine } = require('./prototype_ui/alertEngine.js'); const alerts = runAlertEngine({ brandKey: 'labbaika', triggeredAt: '2026-05-19T00:00:00.000Z', settings: { failedTestSpend: { default: 1000000, labbaika: 1000000 } }, campaigns: [ { campaign_id: 'budget-1', campaign_name: 'Budget Alert', spend: 2000000, leads: 30, cpl: 70000, ctr: 0.021, reach: 80000, total_budget: 10000000, remaining_budget: 1500000, baseline_cpl: 50000, target_metric: 'cpl', target_value: 60000 }, { campaign_id: 'cpl-1', campaign_name: 'CPL Anomaly', spend: 3500000, leads: 20, cpl: 90000, ctr: 0.018, reach: 60000, baseline_cpl: 60000, target_metric: 'cpl', target_value: 65000 }, { campaign_id: 'roas-1', campaign_name: 'ROAS Drop', spend: 4000000, purchases: 4, roas: 2.1, ctr: 0.019, reach: 50000, target_metric: 'roas', target_value: 3.0, target_roas: 3.0, roas_history: [2.5, 2.2] }, { campaign_id: 'delivery-1', campaign_name: 'No Delivery', spend: 1500000, leads: 0, cpl: 0, ctr: 0, reach: 0, hours_without_delivery: 7, target_metric: 'cpl', target_value: 70000 }, { campaign_id: 'fatigue-1', campaign_name: 'Fatigue', spend: 2200000, leads: 24, cpl: 65000, ctr: 0.022, reach: 45000, frequency: 3.4, target_metric: 'cpl', target_value: 70000 }, { campaign_id: 'failed-1', campaign_name: 'Failed Test', spend: 1800000, leads: 0, cpl: 0, ctr: 0.011, reach: 25000, target_metric: 'cpl', target_value: 70000 }, { campaign_id: 'winner-1', campaign_name: 'Winner', spend: 5000000, leads: 80, cpl: 30000, ctr: 0.033, reach: 120000, target_metric: 'cpl', target_value: 65000 } ] }); console.log(Array.from(new Set(alerts.map((item) => item.type))).sort().join(','));"
+```
+
+Output:
+```text
+ad_fatigue,budget_warning,cpl_anomaly,failed_test,no_delivery,roas_drop,winning_ad
+```
+
+## 68. TASK-013 working tree before log updates
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+ M prototype_ui/app.js
+ M prototype_ui/index.html
+?? prototype_ui/alertEngine.js
+```
+
+Catatan:
+```text
+Pada tahap ini perubahan fungsional TASK-013 hanya menyentuh `prototype_ui/app.js`, `prototype_ui/index.html`, dan file baru `prototype_ui/alertEngine.js`.
+```

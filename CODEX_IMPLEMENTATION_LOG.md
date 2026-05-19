@@ -313,3 +313,35 @@
   - belum ada browser-run manual untuk memverifikasi perbedaan visual `?admin=1` vs mode biasa dari terminal ini
   - model MVP ini masih mengasumsikan satu metric utama per brand saat menampilkan target default
 - Validasi self-review disimpan di `TEST_RESULTS.md`.
+
+## 2026-05-19 — TASK-013
+
+- Scope yang dikerjakan hanya `TASK-013`.
+- `PRD.md` tidak ada di repo, jadi referensi implementasi mengikuti `TASKS.md`, `ACCEPTANCE_CRITERIA.md`, dan bagian `2.6 Alert & Anomaly` serta `7.1 Rule-Based Suggest Engine` di `ADS_LAB_PRD_v2 2.md`.
+- Menambahkan file [prototype_ui/alertEngine.js](/Volumes/Daily Project/adslab/prototype_ui/alertEngine.js) sebagai pure function module untuk `runAlertEngine(input)` dengan:
+  - 7 tipe alert: `budget_warning`, `cpl_anomaly`, `roas_drop`, `no_delivery`, `ad_fatigue`, `failed_test`, dan `winning_ad`
+  - schema alert lengkap: `level`, `type`, `title`, `diagnosis`, `action`, `campaign_id`, `triggered_at`
+  - tanpa `fetch`, tanpa DOM manipulation, dan tanpa akses `window`
+  - kompatibilitas untuk dua bentuk input: payload ter-normalisasi dari `app.js` dan object mock ala `dashboardData.<brand>` untuk manual console check
+- Memperbarui [prototype_ui/app.js](/Volumes/Daily Project/adslab/prototype_ui/app.js) untuk:
+  - menambahkan `alertEngineSettings` sebagai threshold config rule-based
+  - membangun payload `buildAlertEngineInput(...)` dari snapshot campaign terbaru
+  - mengganti sumber `brand.alerts` di `buildDashboardViewModel()` agar memakai `runAlertEngine(...)`
+  - menjaga fallback aman ke `buildLegacyDashboardAlerts(...)` jika engine belum termuat atau tidak menghasilkan alert
+- Memperbarui [prototype_ui/index.html](/Volumes/Daily Project/adslab/prototype_ui/index.html) untuk memuat `alertEngine.js` sebelum `app.js`.
+- Tidak ada perubahan ke styling atau area dashboard lain di luar yang dibutuhkan integrasi alert engine.
+- Validasi dilakukan dengan grep 7 tipe alert, grep purity (`fetch/document/window`), `node --check`, wiring check, synthetic run yang memicu 6 tipe alert dari payload mock-style, dan synthetic run kedua yang membuktikan semua 7 tipe alert bisa keluar. Detail output disimpan di `TEST_RESULTS.md`.
+
+## Self-review TASK-013
+
+- Status: PASS
+- Scope yang direview tetap hanya `TASK-013`.
+- Hasil review:
+  - `alertEngine.js` tetap pure: tidak ada `fetch`, tidak ada `document`, dan tidak ada `window`
+  - 7 kondisi dari task sudah terdefinisi dan dapat dipicu lewat payload sintetis
+  - `runAlertEngine(...)` sudah terhubung ke `buildDashboardViewModel()` sehingga alert list dashboard membaca hasil engine
+  - manual console path yang disebut di task sekarang lebih realistis karena engine dapat membaca object mock ala `dashboardData.<brand>`
+- Risiko tersisa:
+  - trigger `budget_warning`, `roas_drop`, dan sebagian `no_delivery` sangat bergantung pada field tambahan seperti `remaining_budget`, `total_budget`, `roas_history`, atau `hours_without_delivery`; jika field itu belum tersedia di snapshot nyata, tipe alert terkait tidak akan sering muncul
+  - fallback legacy alert masih dipertahankan sebagai guard ketika engine tidak termuat atau tidak menghasilkan alert; ini aman untuk UX, tetapi berarti sebagian path non-real-data belum sepenuhnya murni engine-driven
+- Tidak ditemukan risiko besar yang mengharuskan status `BLOCKED`.

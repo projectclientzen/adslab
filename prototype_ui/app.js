@@ -448,6 +448,18 @@ const brandMetricConfig = {
   labbaika: { metric: "cpl", label: "CPL", formatter: formatCurrency },
   alaika: { metric: "cpl", label: "CPL", formatter: formatCurrency },
 };
+const alertEngineSettings = {
+  budgetWarningRatio: 0.2,
+  cplAnomalyThreshold: 0.2,
+  noDeliveryHours: 6,
+  fatigueThreshold: 3,
+  failedTestSpend: {
+    ngajigaes: 3000000,
+    labbaika: 2500000,
+    alaika: 2500000,
+    default: 2500000,
+  },
+};
 
 window.IS_ADMIN = IS_ADMIN;
 
@@ -907,6 +919,7 @@ function buildDashboardViewModel(brandKey, rows, freshnessStatus) {
   const template = dashboardData[brandKey];
   const latestRows = selectLatestSnapshotRows(rows);
   const metrics = getMetricSummary(brandKey, latestRows);
+  const campaigns = buildCampaignGroups(brandKey, latestRows);
   const fetchedAt =
     freshnessStatus?.last_fetched_at ||
     latestRows[0]?.fetched_at ||
@@ -919,11 +932,11 @@ function buildDashboardViewModel(brandKey, rows, freshnessStatus) {
     range: state.range,
     kpis: buildDashboardKpis(brandKey, metrics),
     secondary: buildSecondaryMetrics(metrics),
-    alerts: buildDashboardAlerts(brandKey, metrics, hasRows),
+    alerts: buildDashboardAlerts(brandKey, latestRows, metrics, hasRows),
     fallback: hasRows
       ? `Scheduled snapshot aktif. Last updated ${formatRelativeTime(fetchedAt)} (${formatDateTime(fetchedAt)}).`
       : "Belum ada snapshot Supabase untuk brand ini pada range terpilih.",
-    campaigns: buildCampaignGroups(brandKey, latestRows),
+    campaigns: campaigns,
   };
 }
 
@@ -1030,18 +1043,7 @@ function buildSecondaryMetrics(metrics) {
   ];
 }
 
-function buildDashboardAlerts(brandKey, metrics, hasRows) {
-  if (!hasRows) {
-    return [
-      {
-        level: "warning",
-        title: "Snapshot belum tersedia",
-        diagnosis: "Supabase belum punya snapshot untuk brand atau range yang sedang dipilih.",
-        action: "Tunggu scheduled fetch berikutnya atau cek konfigurasi `meta-fetch` dan `fetch_status`.",
-      },
-    ];
-  }
-
+function buildLegacyDashboardAlerts(brandKey, metrics) {
   const alerts = [];
 
   if (brandKey === "ngajigaes") {
@@ -1095,6 +1097,132 @@ function buildDashboardAlerts(brandKey, metrics, hasRows) {
   );
 
   return alerts;
+}
+
+function getFirstMatchingValue(rows, keys) {
+  for (const row of rows) {
+    for (const key of keys) {
+      const value = row?.[key];
+      if (value !== undefined && value !== null && value !== "") {
+        return value;
+      }
+    }
+  }
+
+  return null;
+}
+
+function getFirstMatchingNumber(rows, keys) {
+  return toFiniteNumber(getFirstMatchingValue(rows, keys));
+}
+
+function getFirstMatchingArray(rows, keys) {
+  const value = getFirstMatchingValue(rows, keys);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => toFiniteNumber(item)).filter((item) => item > 0);
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => toFiniteNumber(item)).filter((item) => item > 0);
+      }
+    } catch (error) {
+      return value
+        .split(",")
+        .map((item) => toFiniteNumber(item.trim()))
+        .filter((item) => item > 0);
+    }
+  }
+
+  return [];
+}
+
+function buildCampaignAlertStats(brandKey, rows) {
+  const campaigns = new Map();
+
+  rows.forEach((row) => {
+    const campaignId = row.campaign_id || "unknown-campaign";
+
+    if (!campaigns.has(campaignId)) {
+      campaigns.set(campaignId, {
+        id: campaignId,
+        name: row.campaign_name || "Unknown Campaign",
+        rows: [],
+      });
+    }
+
+    campaigns.get(campaignId).rows.push(row);
+  });
+
+  return Array.from(campaigns.values()).map((campaign) => {
+    const metrics = getMetricSummary(brandKey, campaign.rows);
+    const targetConfig = getCampaignTargetConfig(brandKey, campaign.id);
+    const statusValue = String(getFirstMatchingValue(campaign.rows, ["status"]) || "active").toLowerCase();
+
+    return {
+      campaign_id: campaign.id,
+      campaign_name: campaign.name,
+      is_active: !statusValue.includes("paused"),
+      spend: metrics.spend,
+      reach: metrics.reach,
+      impressions: metrics.impressions,
+      clicks: metrics.clicks,
+      ctr: metrics.ctr,
+      frequency: metrics.frequency,
+      leads: metrics.leads,
+      purchases: metrics.purchases,
+      roas: metrics.roas,
+      cpl: metrics.cpl,
+      cpp: metrics.cpp,
+      total_budget: getFirstMatchingNumber(campaign.rows, ["total_budget", "budget_limit", "daily_budget"]),
+      remaining_budget: getFirstMatchingNumber(campaign.rows, ["remaining_budget", "budget_remaining"]),
+      baseline_cpl:
+        getFirstMatchingNumber(campaign.rows, ["baseline_cpl", "avg_cpl_baseline"]) ||
+        (targetConfig.kpiType === "cpl" ? targetConfig.targetValue : 0),
+      target_metric: targetConfig.kpiType,
+      target_value: targetConfig.targetValue,
+      target_roas: targetConfig.kpiType === "roas" ? targetConfig.targetValue : brandTargets.ngajigaes.roas,
+      hours_without_delivery: getFirstMatchingNumber(campaign.rows, ["hours_without_delivery", "active_hours", "hours_active"]),
+      consecutive_days_below_target: getFirstMatchingNumber(
+        campaign.rows,
+        ["consecutive_days_below_target", "roas_days_below_target"]
+      ),
+      roas_history: getFirstMatchingArray(campaign.rows, ["roas_history"]),
+    };
+  });
+}
+
+function buildAlertEngineInput(brandKey, rows) {
+  return {
+    brandKey: brandKey,
+    triggeredAt: new Date().toISOString(),
+    settings: alertEngineSettings,
+    campaigns: buildCampaignAlertStats(brandKey, rows),
+  };
+}
+
+function buildDashboardAlerts(brandKey, rows, metrics, hasRows) {
+  if (!hasRows) {
+    return [
+      {
+        level: "warning",
+        title: "Snapshot belum tersedia",
+        diagnosis: "Supabase belum punya snapshot untuk brand atau range yang sedang dipilih.",
+        action: "Tunggu scheduled fetch berikutnya atau cek konfigurasi `meta-fetch` dan `fetch_status`.",
+      },
+    ];
+  }
+
+  if (typeof runAlertEngine !== "function") {
+    return buildLegacyDashboardAlerts(brandKey, metrics);
+  }
+
+  const alerts = runAlertEngine(buildAlertEngineInput(brandKey, rows));
+
+  return alerts.length ? alerts : buildLegacyDashboardAlerts(brandKey, metrics);
 }
 
 function buildCampaignGroups(brandKey, rows) {
