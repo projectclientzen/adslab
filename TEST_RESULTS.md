@@ -2366,3 +2366,94 @@ Catatan:
 ```text
 Check git di environment ini tidak menampilkan output pada saat verifikasi akhir. Tidak ada commit dan tidak ada push yang dijalankan pada pass TASK-013 ini.
 ```
+
+## 71. TASK-014 field presence check
+
+Command:
+```bash
+grep -E "creative_type|cta_button|ad_copy|date_active" extension/content.js | wc -l
+```
+
+Output:
+```text
+24
+```
+
+## 72. TASK-014 content script syntax
+
+Command:
+```bash
+node --check extension/content.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax valid setelah penambahan field enrichment.
+
+## 73. TASK-014 sanitizer and extraction wiring
+
+Command:
+```bash
+rg -n "sanitizeCapturedText|sanitizeCreativeType|normalizeDateActive|MAX_CAPTURED_TEXT_LENGTH|extractAdCopyFromCard|extractCreativeTypeFromCard|extractCtaButtonFromCard|extractDateActiveFromCard" extension/content.js
+```
+
+Output:
+```text
+14:const MAX_CAPTURED_TEXT_LENGTH = 2000;
+206:          ? sanitizeCapturedText(record.ad_copy)
+210:          ? sanitizeCreativeType(record.creative_type)
+214:          ? sanitizeCapturedText(record.cta_button)
+218:          ? normalizeDateActive(record.date_active)
+237:    ad_copy: extractAdCopyFromCard(adCard),
+238:    creative_type: extractCreativeTypeFromCard(adCard),
+239:    cta_button: extractCtaButtonFromCard(adCard),
+240:    date_active: extractDateActiveFromCard(adCard),
+285:function extractAdCopyFromCard(adCard) {
+304:function extractCreativeTypeFromCard(adCard) {
+322:function extractCtaButtonFromCard(adCard) {
+344:function extractDateActiveFromCard(adCard) {
+351:    const normalizedDate = normalizeDateActive(text);
+363:      return sanitizeCapturedText(node.textContent);
+371:function sanitizeCapturedText(value) {
+385:  return sanitized.slice(0, MAX_CAPTURED_TEXT_LENGTH);
+388:function sanitizeCreativeType(value) {
+407:function normalizeDateActive(value) {
+408:  const sanitizedValue = sanitizeCapturedText(String(value || ""));
+```
+
+## 74. TASK-014 diff scope
+
+Command:
+```bash
+git diff -- extension/content.js
+```
+
+Output:
+```text
+(diff reviewed locally; adds DOM-based field enrichment only to extension/content.js)
+```
+
+Catatan:
+```text
+Review diff memastikan scope tetap sempit: hanya `extension/content.js` yang berubah secara fungsional untuk TASK-014.
+```
+
+## 75. TASK-014 working tree before log updates
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+ M extension/content.js
+```
+
+Catatan:
+```text
+Sebelum update log task ini, working tree fungsional hanya menunjukkan perubahan pada `extension/content.js`.
+```

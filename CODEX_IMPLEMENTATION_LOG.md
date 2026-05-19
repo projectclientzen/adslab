@@ -358,3 +358,34 @@ Checklist:
 - Risiko besar: none
 - File yang diubah: `prototype_ui/alertEngine.js`, `prototype_ui/app.js`, `prototype_ui/index.html`, `CODEX_IMPLEMENTATION_LOG.md`, `TEST_RESULTS.md`
 - Catatan untuk human reviewer: engine alert 7 tipe sudah pure dan sudah terhubung ke dashboard; trigger tertentu tetap bergantung pada ketersediaan field snapshot tambahan di data nyata.
+
+## 2026-05-19 — TASK-014
+
+- Scope yang dikerjakan hanya `TASK-014`.
+- `PRD.md` tidak ada di repo, jadi referensi implementasi mengikuti `TASKS.md`, `ACCEPTANCE_CRITERIA.md`, dan bagian Phase 2B field baru di `ADS_LAB_PRD_v2 2.md`.
+- Memperbarui [extension/content.js](/Volumes/Daily Project/adslab/extension/content.js) untuk memperkaya record iklan sebelum dikirim ke background melalui `prepareAndSaveRecords(...)` dengan 4 field baru:
+  - `ad_copy` dari kandidat text node di card iklan
+  - `creative_type` dari heuristic DOM (`video` / `carousel` / `image`)
+  - `cta_button` dari kandidat tombol CTA di card iklan
+  - `date_active` dari kandidat text yang memuat label seperti `Active since` / `Started running on`
+- Null handling dijaga eksplisit:
+  - jika card iklan tidak ditemukan dari `library_id`, semua field baru diisi `null`
+  - jika field tertentu tidak bisa diekstrak atau tidak parseable, nilainya `null`
+- Sanitasi dilakukan di content script:
+  - strip HTML tags
+  - trim dan normalisasi whitespace
+  - truncate maksimum 2000 karakter
+- Tidak ada file fungsional lain yang diubah untuk task ini.
+
+## Self-review TASK-014
+
+Status: SELF-REVIEW: PASS
+KPI: PASS
+
+Checklist:
+- Scope sesuai task: yes
+- Tidak ada scope creep: yes
+- Test/check dijalankan: yes
+- Risiko besar: none
+- File yang diubah: `extension/content.js`, `CODEX_IMPLEMENTATION_LOG.md`, `TEST_RESULTS.md`
+- Catatan untuk human reviewer: enrichment field baru dilakukan di content script berbasis DOM card per `library_id`; live spot-check 10 ads tetap perlu dijalankan di browser extension nyata untuk mengonfirmasi selector Meta terbaru.
