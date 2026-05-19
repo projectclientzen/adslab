@@ -345,3 +345,16 @@
   - trigger `budget_warning`, `roas_drop`, dan sebagian `no_delivery` sangat bergantung pada field tambahan seperti `remaining_budget`, `total_budget`, `roas_history`, atau `hours_without_delivery`; jika field itu belum tersedia di snapshot nyata, tipe alert terkait tidak akan sering muncul
   - fallback legacy alert masih dipertahankan sebagai guard ketika engine tidak termuat atau tidak menghasilkan alert; ini aman untuk UX, tetapi berarti sebagian path non-real-data belum sepenuhnya murni engine-driven
 - Tidak ditemukan risiko besar yang mengharuskan status `BLOCKED`.
+
+## Self-review TASK-013
+
+Status: SELF-REVIEW: PASS
+KPI: PASS
+
+Checklist:
+- Scope sesuai task: yes
+- Tidak ada scope creep: yes
+- Test/check dijalankan: yes
+- Risiko besar: none
+- File yang diubah: `prototype_ui/alertEngine.js`, `prototype_ui/app.js`, `prototype_ui/index.html`, `CODEX_IMPLEMENTATION_LOG.md`, `TEST_RESULTS.md`
+- Catatan untuk human reviewer: engine alert 7 tipe sudah pure dan sudah terhubung ke dashboard; trigger tertentu tetap bergantung pada ketersediaan field snapshot tambahan di data nyata.
