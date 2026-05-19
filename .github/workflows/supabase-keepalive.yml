@@ -1,0 +1,43 @@
+name: Supabase Keepalive
+
+on:
+  schedule:
+    - cron: "0 9 */3 * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST endpoint
+        id: ping
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set +e
+          status_code="$(curl -sS -o /tmp/supabase_response.json -w "%{http_code}" \
+            "${SUPABASE_URL%/}/rest/v1/ads_detail?select=id&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")"
+          echo "status_code=${status_code}" >> "$GITHUB_OUTPUT"
+          cat /tmp/supabase_response.json || true
+          if [ "$status_code" != "200" ]; then
+            exit 1
+          fi
+
+      - name: Notify Telegram on failure
+        if: failure() && secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHAT_ID != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          STATUS_CODE: ${{ steps.ping.outputs.status_code }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          payload="$(printf '{"chat_id":"%s","text":"%s"}' \
+            "$TELEGRAM_CHAT_ID" \
+            "Supabase keepalive gagal untuk ${REPOSITORY}. HTTP status: ${STATUS_CODE:-unknown}. Detail run: ${RUN_URL}")"
+          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "$payload"

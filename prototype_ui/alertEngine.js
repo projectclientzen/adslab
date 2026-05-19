@@ -20,6 +20,12 @@ const ALERT_ENGINE_DEFAULTS = Object.freeze({
     default: 2500000,
   },
 });
+const SCORE_ADS_FUNCTION =
+  typeof window !== "undefined" && typeof window.scoreAds === "function"
+    ? window.scoreAds
+    : typeof require === "function"
+      ? require("./scoringEngine.js").scoreAds
+      : null;
 
 function toFiniteNumber(value) {
   const parsed = Number(value);
@@ -188,6 +194,27 @@ function normalizeAlertEngineInput(input) {
     brandKey: brandKey,
     triggeredAt: safeInput.triggeredAt || new Date().toISOString(),
     settings: normalizeSettings(safeInput.settings),
+    ads: Array.isArray(safeInput.ads)
+      ? safeInput.ads.map(function mapAd(ad) {
+          return {
+            ad_id: ad?.ad_id || null,
+            ad_name: ad?.ad_name || "Ad tanpa nama",
+            campaign_id: ad?.campaign_id || "unknown-campaign",
+            campaign_name: ad?.campaign_name || "Unknown Campaign",
+            spend: toFiniteNumber(ad?.spend),
+            reach: toFiniteNumber(ad?.reach),
+            impressions: toFiniteNumber(ad?.impressions),
+            clicks: toFiniteNumber(ad?.clicks),
+            purchases: toFiniteNumber(ad?.purchases),
+            purchase_value: toFiniteNumber(ad?.purchase_value || ad?.purchaseValue),
+            leads: toFiniteNumber(ad?.leads),
+            roas: toFiniteNumber(ad?.roas),
+            cpl: toFiniteNumber(ad?.cpl),
+            cpp: toFiniteNumber(ad?.cpp),
+            ctr: toFiniteNumber(ad?.ctr),
+          };
+        })
+      : [],
     campaigns: Array.isArray(safeInput.campaigns)
       ? safeInput.campaigns.map(function mapCampaign(campaign) {
           return normalizeCampaign(campaign, {
@@ -381,41 +408,13 @@ function calculateWinningScore(context, campaign, ranges) {
 }
 
 function buildWinningAdAlert(context) {
-  const candidates = context.campaigns.filter(function filterCandidates(campaign) {
-    return campaign.spend > 0;
-  });
-
-  if (!candidates.length) {
+  if (typeof SCORE_ADS_FUNCTION !== "function") {
     return null;
   }
 
-  const ranges = {
-    roas: getMetricRange(candidates, "roas"),
-    cpp: getMetricRange(candidates, "cpp"),
-    ctr: getMetricRange(candidates, "ctr"),
-    cpl: getMetricRange(candidates, "cpl"),
-    reachEfficiency: getMetricRange(
-      candidates.map(function mapCandidate(candidate) {
-        return {
-          reachEfficiency: candidate.reach > 0 ? candidate.leads / candidate.reach : 0,
-        };
-      }),
-      "reachEfficiency"
-    ),
-  };
+  const rankedAds = SCORE_ADS_FUNCTION(context.brandKey, context.ads || []);
+  const winner = rankedAds[0];
 
-  const rankedCandidates = candidates
-    .map(function mapCandidate(candidate) {
-      return {
-        campaign: candidate,
-        score: calculateWinningScore(context, candidate, ranges),
-      };
-    })
-    .sort(function sortCandidates(left, right) {
-      return right.score - left.score;
-    });
-
-  const winner = rankedCandidates[0];
   if (!winner) {
     return null;
   }
@@ -424,9 +423,9 @@ function buildWinningAdAlert(context) {
     "success",
     "winning_ad",
     "Winning ad suggest",
-    "Skor tertinggi datang dari kombinasi efisiensi, delivery, dan momentum performa campaign terbaik saat ini.",
-    "Scale bertahap campaign pemenang ini dan jadikan creative-nya referensi konten untuk iterasi berikutnya.",
-    winner.campaign.campaign_id,
+    `${winner.ad_name} memimpin skor ${winner.score}/100 dari ${rankedAds.length} winning ad teratas untuk ${context.brandKey}.`,
+    "Scale bertahap ad pemenang ini, replikasi hook-nya ke creative baru, dan pakai dua runner-up sebagai benchmark rotasi.",
+    winner.campaign_id,
     context.triggeredAt
   );
 }
@@ -461,6 +460,7 @@ function runAlertEngine(input) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     ALERT_ENGINE_TYPES: ALERT_ENGINE_TYPES,
+    ALERT_ENGINE_DEFAULTS: ALERT_ENGINE_DEFAULTS,
     runAlertEngine: runAlertEngine,
   };
 }

@@ -195,14 +195,96 @@
     return result;
   }
 
+  function buildReferenceKey(prefix, value) {
+    return value ? prefix + ":" + value : null;
+  }
+
+  async function fetchFunnelLabels(adReferences) {
+    const safeReferences = Array.isArray(adReferences) ? adReferences : [];
+
+    if (!window.supabase) {
+      logFallbackWarning("client tidak tersedia untuk fetchFunnelLabels");
+      return {};
+    }
+
+    const libraryIds = Array.from(
+      new Set(
+        safeReferences
+          .map(function mapReference(reference) {
+            return reference?.libraryId || null;
+          })
+          .filter(Boolean)
+      )
+    );
+    const destinationUrls = Array.from(
+      new Set(
+        safeReferences
+          .map(function mapReference(reference) {
+            return reference?.destinationUrl || null;
+          })
+          .filter(Boolean)
+      )
+    );
+
+    if (!libraryIds.length && !destinationUrls.length) {
+      return {};
+    }
+
+    const labelMap = {};
+
+    if (libraryIds.length) {
+      const libraryResult = await window.supabase
+        .from("ads_detail")
+        .select("library_id,destination_url,funnel_type")
+        .in("library_id", libraryIds);
+
+      if (libraryResult.error) {
+        console.warn("[ADS LAB] fetchFunnelLabels fallback:", libraryResult.error.message);
+      } else {
+        reduceFunnelRowsIntoMap(labelMap, libraryResult.data || []);
+      }
+    }
+
+    if (destinationUrls.length) {
+      const destinationResult = await window.supabase
+        .from("ads_detail")
+        .select("library_id,destination_url,funnel_type")
+        .in("destination_url", destinationUrls);
+
+      if (destinationResult.error) {
+        console.warn("[ADS LAB] fetchFunnelLabels fallback:", destinationResult.error.message);
+      } else {
+        reduceFunnelRowsIntoMap(labelMap, destinationResult.data || []);
+      }
+    }
+
+    return labelMap;
+  }
+
+  function reduceFunnelRowsIntoMap(accumulator, rows) {
+    return rows.reduce(function reduceLabels(map, row) {
+      if (row.library_id) {
+        map[buildReferenceKey("library", row.library_id)] = row.funnel_type || "-";
+      }
+
+      if (row.destination_url) {
+        map[buildReferenceKey("destination", row.destination_url)] = row.funnel_type || "-";
+      }
+
+      return map;
+    }, accumulator);
+  }
+
   window.supabaseLibrary = supabaseLibrary || null;
   window.fetchLatestSnapshot = fetchLatestSnapshot;
   window.fetchAdsIntelligence = fetchAdsIntelligence;
   window.saveKpiTarget = saveKpiTarget;
+  window.fetchFunnelLabels = fetchFunnelLabels;
   window.adsLabSupabaseHelpers = {
     fetchLatestSnapshot: fetchLatestSnapshot,
     fetchAdsIntelligence: fetchAdsIntelligence,
     saveKpiTarget: saveKpiTarget,
+    fetchFunnelLabels: fetchFunnelLabels,
   };
 
   if (!supabaseLibrary || typeof supabaseLibrary.createClient !== "function") {

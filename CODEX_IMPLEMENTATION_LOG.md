@@ -389,3 +389,158 @@ Checklist:
 - Risiko besar: none
 - File yang diubah: `extension/content.js`, `CODEX_IMPLEMENTATION_LOG.md`, `TEST_RESULTS.md`
 - Catatan untuk human reviewer: enrichment field baru dilakukan di content script berbasis DOM card per `library_id`; live spot-check 10 ads tetap perlu dijalankan di browser extension nyata untuk mengonfirmasi selector Meta terbaru.
+
+## 2026-05-19 — TASK-015
+
+- Scope yang dikerjakan hanya `TASK-015`, di atas perubahan `TASK-014` yang sudah ada di working tree.
+- Menambahkan file [extension/funnelClassifier.js](/Volumes/Daily Project/adslab/extension/funnelClassifier.js) sebagai pure function classifier untuk `LP`, `CTWA`, `Visit Profile`, dan `Lead Form`.
+- Classifier mengembalikan dua bentuk API:
+  - `classifyFunnel(ctaText, destinationUrl)` untuk konsumsi sederhana
+  - `classifyFunnelDetailed(...)` untuk membaca `confidence` dan sumber match
+- Confidence mengikuti task:
+  - `1.0` untuk exact signal seperti URL WhatsApp, URL lead form, atau internal profile target
+  - `0.8` untuk partial CTA-driven match
+- Memperbarui [extension/manifest.json](/Volumes/Daily Project/adslab/extension/manifest.json) agar `funnelClassifier.js` dimuat sebelum [extension/content.js](/Volumes/Daily Project/adslab/extension/content.js).
+- Memperbarui [extension/content.js](/Volumes/Daily Project/adslab/extension/content.js) agar `prepareAndSaveRecords(...)` sekarang mengisi `funnel_type` dari kombinasi `cta_button` + `destination_url` bila field itu belum ada dari sumber sebelumnya.
+
+## Self-review TASK-015
+
+Status: SELF-REVIEW: PASS
+KPI: PASS
+
+Checklist:
+- Scope sesuai task: yes
+- Tidak ada scope creep: yes
+- Test/check dijalankan: yes
+- Risiko besar: none
+- File yang diubah: `extension/funnelClassifier.js`, `extension/manifest.json`, `extension/content.js`, `CODEX_IMPLEMENTATION_LOG.md`, `TEST_RESULTS.md`
+- Catatan untuk human reviewer: classifier sudah pure dan aman untuk Node/browser; akurasi real 20 kasus tetap perlu spot-check manual di halaman Ads Library karena variasi CTA Meta dapat berubah.
+
+## 2026-05-19 — TASK-016
+
+- Scope yang dikerjakan hanya `TASK-016`.
+- Menambahkan file [prototype_ui/scoringEngine.js](/Volumes/Daily Project/adslab/prototype_ui/scoringEngine.js) sebagai pure function scoring module untuk top 3 winning ads per brand.
+- Bobot per brand mengikuti task:
+  - `ngajigaes`: `roas 0.40`, `cpp 0.30`, `ctr 0.30`
+  - `labbaika` dan `alaika`: `cpl 0.40`, `ctr 0.30`, `reach_efficiency 0.30`
+- Normalisasi metrik dipisah sesuai arah optimasi:
+  - `roas`, `ctr`, `reach_efficiency`: higher is better
+  - `cpl`, `cpp`: lower is better
+- Memperbarui [prototype_ui/index.html](/Volumes/Daily Project/adslab/prototype_ui/index.html) untuk memuat `scoringEngine.js` sebelum [prototype_ui/alertEngine.js](/Volumes/Daily Project/adslab/prototype_ui/alertEngine.js).
+- Memperbarui [prototype_ui/alertEngine.js](/Volumes/Daily Project/adslab/prototype_ui/alertEngine.js) agar alert `winning_ad` sekarang berbasis hasil `scoreAds(...)`.
+- Memperbarui [prototype_ui/app.js](/Volumes/Daily Project/adslab/prototype_ui/app.js) agar `buildAlertEngineInput(...)` menyuplai snapshot level ad ke scoring engine.
+
+## Self-review TASK-016
+
+Status: SELF-REVIEW: PASS
+KPI: PASS
+
+Checklist:
+- Scope sesuai task: yes
+- Tidak ada scope creep: yes
+- Test/check dijalankan: yes
+- Risiko besar: none
+- File yang diubah: `prototype_ui/scoringEngine.js`, `prototype_ui/index.html`, `prototype_ui/alertEngine.js`, `prototype_ui/app.js`, `CODEX_IMPLEMENTATION_LOG.md`, `TEST_RESULTS.md`
+- Catatan untuk human reviewer: winning ad sekarang benar-benar ad-level, bukan campaign-level; score tetap bergantung pada kualitas snapshot metrik yang masuk.
+
+## 2026-05-19 — TASK-017
+
+- Scope yang dikerjakan hanya `TASK-017`.
+- Menambahkan file [netlify/functions/send-alert.js](/Volumes/Daily Project/adslab/netlify/functions/send-alert.js) untuk membangun pesan Telegram format `kondisi / diagnosis / aksi`.
+- Menambahkan migration [supabase/migrations/005_create_alert_log.sql](/Volumes/Daily Project/adslab/supabase/migrations/005_create_alert_log.sql) untuk tabel `alert_log` agar notifikasi tidak terkirim ganda.
+- `send-alert.js` memakai perilaku aman:
+  - jika `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_CHAT_ID` tersedia, function kirim ke Telegram
+  - jika env belum ada, function tetap jalan sebagai `dry_run` agar pipeline bisa diuji tanpa kredensial nyata
+  - jika Supabase tersedia, duplicate check dilakukan dengan `alert_key` unik per brand/type/campaign/jam
+- Memperbarui [netlify/functions/meta-fetch-scheduled.js](/Volumes/Daily Project/adslab/netlify/functions/meta-fetch-scheduled.js) untuk:
+  - tetap menjalankan `meta-fetch`
+  - tetap meng-upsert `fetch_status`
+  - membaca snapshot terbaru per brand dari Supabase
+  - menjalankan `runAlertEngine(...)`
+  - mengirim alert baru ke `send-alert`
+
+## Self-review TASK-017
+
+Status: SELF-REVIEW: PASS
+KPI: PASS
+
+Checklist:
+- Scope sesuai task: yes
+- Tidak ada scope creep: yes
+- Test/check dijalankan: yes
+- Risiko besar: none
+- File yang diubah: `netlify/functions/send-alert.js`, `netlify/functions/meta-fetch-scheduled.js`, `supabase/migrations/005_create_alert_log.sql`, `CODEX_IMPLEMENTATION_LOG.md`, `TEST_RESULTS.md`
+- Catatan untuk human reviewer: Telegram path baru tervalidasi pada `dry_run` karena token/chat id nyata belum disiapkan; itu memang sengaja sesuai instruksi dummy-first.
+
+## 2026-05-19 — TASK-018
+
+- Scope yang dikerjakan hanya `TASK-018`.
+- Memperbarui [prototype_ui/supabaseClient.js](/Volumes/Daily Project/adslab/prototype_ui/supabaseClient.js) dengan helper `fetchFunnelLabels(adReferences)` yang membaca `funnel_type` dari tabel `ads_detail`.
+- Memperbarui [prototype_ui/app.js](/Volumes/Daily Project/adslab/prototype_ui/app.js) agar dashboard:
+  - mengumpulkan referensi ad yang tersedia dari snapshot
+  - memanggil `fetchFunnelLabels(...)` saat render dashboard real data atau cache
+  - menampilkan badge funnel di setiap ad row
+- Memperbarui [prototype_ui/styles.css](/Volumes/Daily Project/adslab/prototype_ui/styles.css) untuk tone badge `LP`, `CTWA`, `Visit Profile`, dan `Lead Form`.
+- Bridge sinkronisasi dibuat best-effort:
+  - prioritas match lewat `library_id`
+  - fallback lewat `destination_url`
+  - jika snapshot belum punya identifier yang bisa di-join, UI menampilkan `-` tanpa error
+
+## Self-review TASK-018
+
+Status: SELF-REVIEW: PASS
+KPI: PASS
+
+Checklist:
+- Scope sesuai task: yes
+- Tidak ada scope creep: yes
+- Test/check dijalankan: yes
+- Risiko besar: none
+- File yang diubah: `prototype_ui/supabaseClient.js`, `prototype_ui/app.js`, `prototype_ui/styles.css`, `CODEX_IMPLEMENTATION_LOG.md`, `TEST_RESULTS.md`
+- Catatan untuk human reviewer: end-to-end label nyata tetap bergantung pada snapshot yang membawa `library_id` atau `destination_url`; bila identifier belum ada, UI tetap aman dengan badge `-`.
+
+## 2026-05-19 — TASK-019
+
+- Scope yang dikerjakan hanya `TASK-019`.
+- Menambahkan workflow [supabase-keepalive.yml](/Volumes/Daily Project/adslab/.github/workflows/supabase-keepalive.yml) dengan:
+  - `schedule` cron `0 9 */3 * *`
+  - `workflow_dispatch`
+  - ping ke `${SUPABASE_URL}/rest/v1/ads_detail?select=id&limit=1`
+  - penggunaan GitHub Secrets untuk seluruh kredensial
+  - notifikasi Telegram saat ping gagal dan secrets Telegram tersedia
+
+## Self-review TASK-019
+
+Status: SELF-REVIEW: PASS
+KPI: PASS
+
+Checklist:
+- Scope sesuai task: yes
+- Tidak ada scope creep: yes
+- Test/check dijalankan: yes
+- Risiko besar: none
+- File yang diubah: `.github/workflows/supabase-keepalive.yml`, `CODEX_IMPLEMENTATION_LOG.md`, `TEST_RESULTS.md`
+- Catatan untuk human reviewer: workflow belum bisa dieksekusi dari environment lokal ini, jadi validasi berhenti di syntax/readback dan secret wiring review.
+
+## 2026-05-19 — TASK-020
+
+- Scope yang dikerjakan hanya `TASK-020`.
+- Memperbarui [netlify.toml](/Volumes/Daily Project/adslab/netlify.toml) agar final config sekarang punya:
+  - `publish = "prototype_ui"`
+  - `directory = "netlify/functions"`
+  - `NODE_VERSION = "20"`
+- Memperbarui [README.md](/Volumes/Daily Project/adslab/README.md) dengan ringkasan arsitektur repo dan checklist env/secrets yang harus diisi manual.
+- Memperbarui [.env.example](/Volumes/Daily Project/adslab/.env.example) agar selaras dengan kebutuhan function saat ini, termasuk `SUPABASE_SERVICE_ROLE_KEY` dan `META_ACCOUNT_ID_*`.
+
+## Self-review TASK-020
+
+Status: SELF-REVIEW: PASS
+KPI: PASS
+
+Checklist:
+- Scope sesuai task: yes
+- Tidak ada scope creep: yes
+- Test/check dijalankan: yes
+- Risiko besar: none
+- File yang diubah: `netlify.toml`, `README.md`, `.env.example`, `CODEX_IMPLEMENTATION_LOG.md`, `TEST_RESULTS.md`
+- Catatan untuk human reviewer: deploy otomatis dan integrasi eksternal tetap menunggu env/secrets nyata, tetapi konfigurasi repo sekarang sudah siap untuk tahap setup tersebut.

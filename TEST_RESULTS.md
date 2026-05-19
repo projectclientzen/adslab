@@ -2457,3 +2457,223 @@ Catatan:
 ```text
 Sebelum update log task ini, working tree fungsional hanya menunjukkan perubahan pada `extension/content.js`.
 ```
+
+## 76. TASK-015 funnel classifier node test
+
+Command:
+```bash
+node -e "const { classifyFunnel, classifyFunnelDetailed } = require('./extension/funnelClassifier.js'); console.assert(classifyFunnel('Send Message', 'https://wa.me/628123') === 'CTWA'); console.assert(classifyFunnel('Sign Up', 'https://facebook.com/lead_gen/xyz') === 'Lead Form'); console.assert(classifyFunnel('View Profile', '') === 'Visit Profile'); console.assert(classifyFunnel('Learn More', 'https://labbaikatravel.com/umroh') === 'LP'); const detail = classifyFunnelDetailed('Send Message', 'https://m.me/page'); console.assert(detail.confidence === 1); console.log('funnel-classifier-ok');"
+```
+
+Output:
+```text
+funnel-classifier-ok
+```
+
+## 77. TASK-015 funnel classifier wiring
+
+Command:
+```bash
+grep -n "funnelClassifier.js\|funnel_type\|classifyRecordFunnelType\|sanitizeFunnelType" extension/manifest.json extension/content.js
+```
+
+Output:
+```text
+extension/manifest.json:19:      "js": ["funnelClassifier.js", "content.js"],
+extension/content.js:216:      funnel_type:
+extension/content.js:217:        record.funnel_type !== undefined && record.funnel_type !== null
+extension/content.js:404:function sanitizeFunnelType(value) {
+extension/content.js:428:function classifyRecordFunnelType(record, extractedFields) {
+```
+
+## 78. TASK-016 scoring engine syntax
+
+Command:
+```bash
+node --check prototype_ui/scoringEngine.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: exit code `0`, jadi syntax valid.
+
+## 79. TASK-016 scoring engine ranking
+
+Command:
+```bash
+node -e "const { scoreAds } = require('./prototype_ui/scoringEngine.js'); const ads=[{ad_id:'a1',ad_name:'A1',campaign_id:'c1',spend:100000,roas:4.2,cpp:20000,ctr:0.04,reach:8000,purchases:5,impressions:20000,clicks:800},{ad_id:'a2',ad_name:'A2',campaign_id:'c1',spend:100000,roas:2.1,cpp:40000,ctr:0.02,reach:7000,purchases:2,impressions:20000,clicks:400},{ad_id:'a3',ad_name:'A3',campaign_id:'c2',spend:100000,roas:3.5,cpp:25000,ctr:0.03,reach:7500,purchases:4,impressions:20000,clicks:600},{ad_id:'a4',ad_name:'A4',campaign_id:'c2',spend:100000,roas:1.4,cpp:50000,ctr:0.01,reach:6000,purchases:1,impressions:20000,clicks:200}]; const result=scoreAds('ngajigaes', ads); console.assert(result.length===3); console.assert(result[0].score>=result[1].score); console.assert(result[0].ad_id==='a1'); console.log('scoring-engine-ok', result.map((item)=>item.ad_id+':'+item.score).join(','));"
+```
+
+Output:
+```text
+scoring-engine-ok a1:100,a3:79.83,a2:50
+```
+
+## 80. TASK-016 alert engine winning ad path
+
+Command:
+```bash
+node -e "const { runAlertEngine } = require('./prototype_ui/alertEngine.js'); const alerts = runAlertEngine({ brandKey:'ngajigaes', campaigns:[{campaign_id:'c1',campaign_name:'Warm',spend:5000000,reach:10000,impressions:25000,clicks:500,purchases:50,purchase_value:22000000,leads:0,roas:4.4,cpp:100000,ctr:0.02,frequency:2.5,total_budget:10000000,remaining_budget:1000000,roas_history:[4.8,4.6,4.4],consecutive_days_below_target:0}], ads:[{ad_id:'a1',ad_name:'Winner Reel',campaign_id:'c1',campaign_name:'Warm',spend:1000000,reach:5000,impressions:10000,clicks:400,purchases:20,purchase_value:6000000,roas:6,cpl:0,cpp:50000,ctr:0.04},{ad_id:'a2',ad_name:'Bench',campaign_id:'c1',campaign_name:'Warm',spend:1000000,reach:4500,impressions:10000,clicks:250,purchases:10,purchase_value:3000000,roas:3,cpp:100000,ctr:0.025}]}); console.assert(alerts.some((item)=>item.type==='winning_ad')); console.log('alert-engine-ok', alerts.map((item)=>item.type).join(','));"
+```
+
+Output:
+```text
+alert-engine-ok budget_warning,winning_ad
+```
+
+## 81. TASK-017 send-alert syntax
+
+Command:
+```bash
+node --check netlify/functions/send-alert.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: exit code `0`, jadi syntax valid.
+
+## 82. TASK-017 send-alert dry run
+
+Command:
+```bash
+node -e "process.env.SUPABASE_URL=''; process.env.SUPABASE_ANON_KEY=''; process.env.TELEGRAM_BOT_TOKEN=''; process.env.TELEGRAM_CHAT_ID=''; const fn=require('./netlify/functions/send-alert.js'); fn.handler({body: JSON.stringify({brand:'ngajigaes',type:'budget_warning',title:'Budget warning',diagnosis:'sisa budget tipis',action:'top up',campaign_id:'c1'})}).then((response)=>{const body=JSON.parse(response.body); console.assert(body.results[0].dry_run===true); console.log('send-alert-dry-run-ok');}).catch((error)=>{console.error(error); process.exit(1);});"
+```
+
+Output:
+```text
+send-alert-dry-run-ok
+```
+
+## 83. TASK-017 scheduled function load check
+
+Command:
+```bash
+node -e "require('./netlify/functions/meta-fetch-scheduled.js'); console.log('meta-fetch-scheduled-load-ok');"
+```
+
+Output:
+```text
+meta-fetch-scheduled-load-ok
+```
+
+## 84. TASK-018 funnel sync grep
+
+Command:
+```bash
+grep -n "fetchFunnelLabels\|funnelLabelsByKey\|renderFunnelBadge\|buildDashboardAdReferences" prototype_ui/supabaseClient.js prototype_ui/app.js
+```
+
+Output:
+```text
+prototype_ui/supabaseClient.js:201:  async function fetchFunnelLabels(adReferences) {
+prototype_ui/supabaseClient.js:206:      logFallbackWarning("client tidak tersedia untuk fetchFunnelLabels");
+prototype_ui/supabaseClient.js:262:  window.fetchFunnelLabels = fetchFunnelLabels;
+prototype_ui/supabaseClient.js:267:    fetchFunnelLabels: fetchFunnelLabels,
+prototype_ui/app.js:437:  funnelLabelsByKey: {},
+prototype_ui/app.js:943:  const campaigns = buildCampaignGroups(brandKey, latestRows, runtimeState.funnelLabelsByKey);
+prototype_ui/app.js:1875:                              ${renderFunnelBadge(ad.funnelLabel)}
+prototype_ui/app.js:1896:function renderFunnelBadge(label) {
+prototype_ui/app.js:1940:    runtimeState.funnelLabelsByKey =
+prototype_ui/app.js:1941:      typeof window.fetchFunnelLabels === "function"
+prototype_ui/app.js:1942:        ? await window.fetchFunnelLabels(buildDashboardAdReferences(snapshotRows))
+prototype_ui/app.js:1989:      runtimeState.funnelLabelsByKey =
+prototype_ui/app.js:1990:        typeof window.fetchFunnelLabels === "function"
+prototype_ui/app.js:1991:          ? await window.fetchFunnelLabels(buildDashboardAdReferences(cachedSnapshot.rows))
+prototype_ui/app.js:2021:function buildDashboardAdReferences(rows) {
+```
+
+## 85. TASK-019 workflow secret wiring
+
+Command:
+```bash
+grep -n "cron:\|workflow_dispatch\|secrets\.SUPABASE_URL\|secrets\.TELEGRAM_BOT_TOKEN" .github/workflows/supabase-keepalive.yml
+```
+
+Output:
+```text
+5:    - cron: "0 9 */3 * *"
+6:  workflow_dispatch:
+15:          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+30:        if: failure() && secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHAT_ID != ''
+32:          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+```
+
+## 86. TASK-020 netlify config final check
+
+Command:
+```bash
+grep -n "publish = \"prototype_ui\"\|directory = \"netlify/functions\"\|NODE_VERSION = \"20\"" netlify.toml
+```
+
+Output:
+```text
+2:  publish = "prototype_ui"
+5:  directory = "netlify/functions"
+8:  NODE_VERSION = "20"
+```
+
+## 87. TASK-015 sampai TASK-020 syntax sweep
+
+Command:
+```bash
+node --check extension/funnelClassifier.js
+node --check extension/content.js
+node --check prototype_ui/scoringEngine.js
+node --check prototype_ui/alertEngine.js
+node --check prototype_ui/supabaseClient.js
+node --check prototype_ui/app.js
+node --check netlify/functions/meta-fetch-scheduled.js
+node --check netlify/functions/send-alert.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: semua command `node --check` exit code `0`.
+
+## 88. TASK-015 sampai TASK-020 final alert engine labbaika check
+
+Command:
+```bash
+node -e "const { runAlertEngine } = require('./prototype_ui/alertEngine.js'); const alerts = runAlertEngine({ brandKey:'labbaika', campaigns:[{campaign_id:'c1',campaign_name:'Campaign 1',spend:3000000,reach:30000,impressions:80000,clicks:1200,leads:30,cpl:100000,ctr:0.015,frequency:2.6,baseline_cpl:70000,total_budget:9000000,remaining_budget:1000000,hours_without_delivery:0}], ads:[{ad_id:'a1',ad_name:'Creative A',campaign_id:'c1',campaign_name:'Campaign 1',spend:1000000,reach:15000,impressions:40000,clicks:800,leads:20,cpl:50000,ctr:0.02},{ad_id:'a2',ad_name:'Creative B',campaign_id:'c1',campaign_name:'Campaign 1',spend:1000000,reach:10000,impressions:40000,clicks:400,leads:8,cpl:125000,ctr:0.01},{ad_id:'a3',ad_name:'Creative C',campaign_id:'c1',campaign_name:'Campaign 1',spend:1000000,reach:12000,impressions:40000,clicks:600,leads:10,cpl:100000,ctr:0.015}]}); console.assert(alerts.some((item)=>item.type==='cpl_anomaly')); console.assert(alerts.some((item)=>item.type==='winning_ad')); console.log('alert-engine-labbaika-ok');"
+```
+
+Output:
+```text
+alert-engine-labbaika-ok
+```
+
+## 89. TASK-015 sampai TASK-020 final working tree check
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+ M .env.example
+ M README.md
+ M extension/content.js
+ M extension/manifest.json
+ M netlify.toml
+ M netlify/functions/meta-fetch-scheduled.js
+ M prototype_ui/alertEngine.js
+ M prototype_ui/app.js
+ M prototype_ui/index.html
+ M prototype_ui/styles.css
+ M prototype_ui/supabaseClient.js
+?? .github/
+?? extension/funnelClassifier.js
+?? netlify/functions/send-alert.js
+?? prototype_ui/scoringEngine.js
+?? supabase/migrations/005_create_alert_log.sql
+```

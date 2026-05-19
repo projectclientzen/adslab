@@ -11,6 +11,22 @@ const AUTO_SCROLL_STATE_STORAGE_KEY = "adsLabScrollState";
 const AUTO_SCROLL_SENTINEL_ID = "ads-lab-scroll-sentinel";
 const AUTO_SCROLL_STEP_PX = 800;
 const MAX_STAGNANT_SCROLLS = 3;
+const MAX_CAPTURED_TEXT_LENGTH = 2000;
+const CTA_TEXT_PATTERNS = [
+  "learn more",
+  "send message",
+  "send whatsapp message",
+  "sign up",
+  "book now",
+  "apply now",
+  "contact us",
+  "get quote",
+  "download",
+  "shop now",
+  "call now",
+  "view profile",
+  "watch more",
+];
 const scrollState = {
   active: false,
   completed: false,
@@ -155,10 +171,11 @@ function attachDestinationUrlsToRecords(records) {
 
 async function prepareAndSaveRecords(records) {
   const recordsWithDestinationUrl = await attachDestinationUrlsToRecords(records);
+  const enrichedRecords = enrichRecordsWithAdFields(recordsWithDestinationUrl);
 
   return chrome.runtime.sendMessage({
     type: SAVE_AD_RECORDS_MESSAGE,
-    records: recordsWithDestinationUrl,
+    records: enrichedRecords,
   });
 }
 
@@ -172,6 +189,284 @@ async function getDedupStats() {
 
 window.adsLabPrepareAndSaveRecords = prepareAndSaveRecords;
 window.adsLabGetDedupStats = getDedupStats;
+
+function enrichRecordsWithAdFields(records) {
+  const safeRecords = Array.isArray(records) ? records : [];
+
+  return safeRecords.map(function enrichRecord(record) {
+    if (!record || !record.library_id) {
+      return record;
+    }
+
+    const extractedFields = extractAdFieldsForLibraryId(record.library_id);
+
+    return Object.assign({}, record, {
+      ad_copy:
+        record.ad_copy !== undefined && record.ad_copy !== null
+          ? sanitizeCapturedText(record.ad_copy)
+          : extractedFields.ad_copy,
+      creative_type:
+        record.creative_type !== undefined && record.creative_type !== null
+          ? sanitizeCreativeType(record.creative_type)
+          : extractedFields.creative_type,
+      cta_button:
+        record.cta_button !== undefined && record.cta_button !== null
+          ? sanitizeCapturedText(record.cta_button)
+          : extractedFields.cta_button,
+      funnel_type:
+        record.funnel_type !== undefined && record.funnel_type !== null
+          ? sanitizeFunnelType(record.funnel_type)
+          : classifyRecordFunnelType(record, extractedFields),
+      date_active:
+        record.date_active !== undefined && record.date_active !== null
+          ? normalizeDateActive(record.date_active)
+          : extractedFields.date_active,
+    });
+  });
+}
+
+function extractAdFieldsForLibraryId(libraryId) {
+  const adCard = getAdCardByLibraryId(libraryId);
+
+  if (!adCard) {
+    return {
+      ad_copy: null,
+      creative_type: null,
+      cta_button: null,
+      date_active: null,
+    };
+  }
+
+  return {
+    ad_copy: extractAdCopyFromCard(adCard),
+    creative_type: extractCreativeTypeFromCard(adCard),
+    cta_button: extractCtaButtonFromCard(adCard),
+    date_active: extractDateActiveFromCard(adCard),
+  };
+}
+
+function getAdCardByLibraryId(libraryId) {
+  if (!libraryId) {
+    return null;
+  }
+
+  const matchingLink = getAdLinks().find(function findMatchingLink(link) {
+    return extractLibraryIdFromUrl(link.href) === String(libraryId);
+  });
+
+  if (!matchingLink) {
+    return null;
+  }
+
+  return findAdCardElement(matchingLink);
+}
+
+function findAdCardElement(link) {
+  let currentNode = link;
+
+  while (currentNode && currentNode !== document.body) {
+    const adLinkCount = currentNode.querySelectorAll(
+      'a[href*="/ads/library/?id="], a[href*="ads/library/?id="], a[href*="ad_archive_id="]'
+    ).length;
+    const textNodeCount = currentNode.querySelectorAll(
+      '[role="text"], div[dir="auto"], span[dir="auto"], button, [role="button"]'
+    ).length;
+
+    if (adLinkCount === 1 && textNodeCount >= 3) {
+      return currentNode;
+    }
+
+    currentNode = currentNode.parentElement;
+  }
+
+  return (
+    link.closest('[role="article"], article, [data-pagelet], [role="feed"] > div') ||
+    link.parentElement ||
+    null
+  );
+}
+
+function extractAdCopyFromCard(adCard) {
+  const candidateTexts = collectCandidateTexts(
+    adCard,
+    '[role="text"], div[dir="auto"], span[dir="auto"], div[data-ad-preview="message"]'
+  ).filter(function filterCandidate(text) {
+    return !isMetaText(text) && text.split(/\s+/).length >= 3;
+  });
+
+  if (!candidateTexts.length) {
+    return null;
+  }
+
+  candidateTexts.sort(function sortByLength(left, right) {
+    return right.length - left.length;
+  });
+
+  return candidateTexts[0] || null;
+}
+
+function extractCreativeTypeFromCard(adCard) {
+  const videoCount = adCard.querySelectorAll("video").length;
+  if (videoCount > 0) {
+    return "video";
+  }
+
+  const imageCount = adCard.querySelectorAll("img").length;
+  if (imageCount > 1) {
+    return "carousel";
+  }
+
+  if (imageCount >= 1) {
+    return "image";
+  }
+
+  return null;
+}
+
+function extractCtaButtonFromCard(adCard) {
+  const buttonTexts = collectCandidateTexts(
+    adCard,
+    'button, [role="button"], a[role="button"], div[role="button"]'
+  );
+
+  const matchedCta = buttonTexts.find(function matchKnownCta(text) {
+    const normalizedText = text.toLowerCase();
+    return CTA_TEXT_PATTERNS.some(function hasPattern(pattern) {
+      return normalizedText.includes(pattern);
+    });
+  });
+
+  if (matchedCta) {
+    return matchedCta;
+  }
+
+  return buttonTexts.find(function findFallbackButton(text) {
+    return text.length <= 80 && !/see ad details|lihat detail iklan/i.test(text);
+  }) || null;
+}
+
+function extractDateActiveFromCard(adCard) {
+  const candidateTexts = collectCandidateTexts(
+    adCard,
+    '[role="text"], div[dir="auto"], span[dir="auto"]'
+  );
+
+  for (const text of candidateTexts) {
+    const normalizedDate = normalizeDateActive(text);
+    if (normalizedDate) {
+      return normalizedDate;
+    }
+  }
+
+  return null;
+}
+
+function collectCandidateTexts(rootNode, selector) {
+  return Array.from(rootNode.querySelectorAll(selector))
+    .map(function mapNode(node) {
+      return sanitizeCapturedText(node.textContent);
+    })
+    .filter(Boolean)
+    .filter(function uniqueOnly(value, index, allValues) {
+      return allValues.indexOf(value) === index;
+    });
+}
+
+function sanitizeCapturedText(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const sanitized = value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!sanitized) {
+    return null;
+  }
+
+  return sanitized.slice(0, MAX_CAPTURED_TEXT_LENGTH);
+}
+
+function sanitizeCreativeType(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "video" || normalized === "carousel" || normalized === "image") {
+    return normalized;
+  }
+
+  return null;
+}
+
+function sanitizeFunnelType(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === "lp") {
+    return "LP";
+  }
+
+  if (normalized === "ctwa") {
+    return "CTWA";
+  }
+
+  if (normalized === "visit profile") {
+    return "Visit Profile";
+  }
+
+  if (normalized === "lead form") {
+    return "Lead Form";
+  }
+
+  return null;
+}
+
+function classifyRecordFunnelType(record, extractedFields) {
+  const classifier = window.adsLabFunnelClassifier || null;
+  const ctaText =
+    sanitizeCapturedText(record?.cta_button) || extractedFields?.cta_button || null;
+  const destinationUrl =
+    sanitizeCapturedText(record?.destination_url) || sanitizeCapturedText(record?.url) || null;
+
+  if (!classifier || typeof classifier.classifyFunnelDetailed !== "function") {
+    return null;
+  }
+
+  const classification = classifier.classifyFunnelDetailed(ctaText, destinationUrl);
+  return sanitizeFunnelType(classification?.funnelType);
+}
+
+function isMetaText(text) {
+  return /^(sponsored|bersponsor|learn more|send message|send whatsapp message|sign up|active since|started running on|lihat detail iklan)$/i.test(
+    text
+  );
+}
+
+function normalizeDateActive(value) {
+  const sanitizedValue = sanitizeCapturedText(String(value || ""));
+  if (!sanitizedValue) {
+    return null;
+  }
+
+  const matchedLabel = sanitizedValue.match(
+    /(active since|started running on|running since|mulai tayang|tayang sejak)\s*(.+)$/i
+  );
+  const candidateDateText = matchedLabel ? matchedLabel[2] : sanitizedValue;
+  const parsedTimestamp = Date.parse(candidateDateText);
+
+  if (Number.isFinite(parsedTimestamp)) {
+    return new Date(parsedTimestamp).toISOString();
+  }
+
+  return null;
+}
 
 function bootstrapAutoScroll() {
   if (document.readyState === "loading") {

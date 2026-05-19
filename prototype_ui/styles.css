@@ -841,6 +841,20 @@ body::before {
   color: var(--mint);
 }
 
+.tag.amber {
+  color: #ffb347;
+}
+
+.tag.rose {
+  color: #f56f6f;
+}
+
+.funnel-tag {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+}
+
 .analysis-grid {
   align-items: stretch;
 }

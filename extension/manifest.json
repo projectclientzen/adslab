@@ -18,7 +18,7 @@
   "content_scripts": [
     {
       "matches": ["https://www.facebook.com/ads/library*"],
-      "js": ["content.js"],
+      "js": ["funnelClassifier.js", "content.js"],
       "run_at": "document_start"
     }
   ],

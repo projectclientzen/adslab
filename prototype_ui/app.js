@@ -434,6 +434,7 @@ const runtimeState = {
   intelligenceRequestId: 0,
   dashboardBanner: null,
   kpiTargetsByCampaign: {},
+  funnelLabelsByKey: {},
   editingCampaignId: null,
   draftTargetValue: "",
   savingCampaignId: null,
@@ -919,7 +920,7 @@ function buildDashboardViewModel(brandKey, rows, freshnessStatus) {
   const template = dashboardData[brandKey];
   const latestRows = selectLatestSnapshotRows(rows);
   const metrics = getMetricSummary(brandKey, latestRows);
-  const campaigns = buildCampaignGroups(brandKey, latestRows);
+  const campaigns = buildCampaignGroups(brandKey, latestRows, runtimeState.funnelLabelsByKey);
   const fetchedAt =
     freshnessStatus?.last_fetched_at ||
     latestRows[0]?.fetched_at ||
@@ -1200,8 +1201,35 @@ function buildAlertEngineInput(brandKey, rows) {
     brandKey: brandKey,
     triggeredAt: new Date().toISOString(),
     settings: alertEngineSettings,
+    ads: buildAdAlertStats(rows),
     campaigns: buildCampaignAlertStats(brandKey, rows),
   };
+}
+
+function buildAdAlertStats(rows) {
+  return rows
+    .filter(function filterAdRows(row) {
+      return row && (row.level === "ad" || row.ad_id || row.ad_name);
+    })
+    .map(function mapAdRow(row) {
+      return {
+        ad_id: row.ad_id || null,
+        ad_name: row.ad_name || "Ad tanpa nama",
+        campaign_id: row.campaign_id || "unknown-campaign",
+        campaign_name: row.campaign_name || "Unknown Campaign",
+        spend: toFiniteNumber(row.spend),
+        reach: toFiniteNumber(row.reach),
+        impressions: toFiniteNumber(row.impressions),
+        clicks: toFiniteNumber(row.clicks),
+        purchases: toFiniteNumber(row.purchases),
+        purchase_value: toFiniteNumber(row.purchase_value),
+        leads: toFiniteNumber(row.leads),
+        roas: toFiniteNumber(row.roas),
+        cpl: toFiniteNumber(row.cpl),
+        cpp: toFiniteNumber(row.cpp),
+        ctr: toFiniteNumber(row.ctr),
+      };
+    });
 }
 
 function buildDashboardAlerts(brandKey, rows, metrics, hasRows) {
@@ -1225,7 +1253,7 @@ function buildDashboardAlerts(brandKey, rows, metrics, hasRows) {
   return alerts.length ? alerts : buildLegacyDashboardAlerts(brandKey, metrics);
 }
 
-function buildCampaignGroups(brandKey, rows) {
+function buildCampaignGroups(brandKey, rows, funnelLabelsByKey) {
   const campaigns = new Map();
 
   rows.forEach((row) => {
@@ -1256,13 +1284,17 @@ function buildCampaignGroups(brandKey, rows) {
 
     const adset = campaign.adsets.get(adsetKey);
     adset.rows.push(row);
+    const referenceKey = buildAdReferenceKey(row);
     adset.ads.push({
+      id: row.ad_id || null,
       name: row.ad_name || "Ad tanpa nama",
       status: normalizeAdLabel(row),
       spend: formatCurrency(row.spend),
       result: formatPrimaryResult(brandKey, row),
       efficiency: formatRowEfficiency(brandKey, row),
       reach: formatCompactNumber(row.reach),
+      funnelLabel: getResolvedFunnelLabel(row, funnelLabelsByKey, referenceKey),
+      referenceKey: referenceKey,
     });
   });
 
@@ -1303,6 +1335,34 @@ function buildCampaignGroups(brandKey, rows) {
     .sort((left, right) => {
       return toFiniteNumber(right.spend?.replace(/[^\d]/g, "")) - toFiniteNumber(left.spend?.replace(/[^\d]/g, ""));
     });
+}
+
+function buildAdReferenceKey(row) {
+  if (row?.library_id) {
+    return `library:${row.library_id}`;
+  }
+
+  if (row?.destination_url) {
+    return `destination:${row.destination_url}`;
+  }
+
+  if (row?.ad_id) {
+    return `ad:${row.ad_id}`;
+  }
+
+  return null;
+}
+
+function getResolvedFunnelLabel(row, funnelLabelsByKey, referenceKey) {
+  if (row?.funnel_type) {
+    return row.funnel_type;
+  }
+
+  if (!referenceKey || !funnelLabelsByKey) {
+    return "-";
+  }
+
+  return funnelLabelsByKey[referenceKey] || "-";
 }
 
 function normalizeStatus(status) {
@@ -1779,6 +1839,7 @@ function applyDashboardViewModel(brand) {
                             <div>
                               <strong>${ad.name}</strong>
                               <span>Ad • ${ad.status}</span>
+                              ${renderFunnelBadge(ad.funnelLabel)}
                             </div>
                             <span>${ad.spend}</span>
                             <span>${ad.result}</span>
@@ -1808,6 +1869,23 @@ function applyDashboardViewModel(brand) {
   bindKpiConfigActions();
 }
 
+function renderFunnelBadge(label) {
+  if (!label || label === "-") {
+    return '<span class="tag funnel-tag">-</span>';
+  }
+
+  const toneByLabel = {
+    LP: "gold",
+    CTWA: "mint",
+    "Visit Profile": "amber",
+    "Lead Form": "rose",
+  };
+  const tone = toneByLabel[label] || "";
+  const toneClass = tone ? ` ${tone}` : "";
+
+  return `<span class="tag funnel-tag${toneClass}">${label}</span>`;
+}
+
 async function renderDashboard() {
   const requestId = ++runtimeState.dashboardRequestId;
 
@@ -1827,12 +1905,14 @@ async function renderDashboard() {
 
   try {
     if (!USE_REAL_DATA || typeof window.fetchLatestSnapshot !== "function") {
+      runtimeState.funnelLabelsByKey = {};
       applyDashboardViewModel(dashboardData[state.brand]);
       setStaleBanner(null);
       return;
     }
 
     if (!isSupabaseClientReady()) {
+      runtimeState.funnelLabelsByKey = {};
       applyDashboardViewModel(dashboardData[state.brand]);
       setStaleBanner(null);
       setTopbarState({
@@ -1855,6 +1935,10 @@ async function renderDashboard() {
       runtimeState.kpiTargetsByCampaign,
       await fetchKpiTargetsForBrand(state.brand),
     );
+    runtimeState.funnelLabelsByKey =
+      typeof window.fetchFunnelLabels === "function"
+        ? await window.fetchFunnelLabels(buildDashboardAdReferences(snapshotRows))
+        : {};
 
     if (requestId !== runtimeState.dashboardRequestId) {
       return;
@@ -1899,6 +1983,10 @@ async function renderDashboard() {
     const cachedSnapshot = readSnapshotFromCache(state.brand);
 
     if (cachedSnapshot?.rows?.length) {
+      runtimeState.funnelLabelsByKey =
+        typeof window.fetchFunnelLabels === "function"
+          ? await window.fetchFunnelLabels(buildDashboardAdReferences(cachedSnapshot.rows))
+          : {};
       const cachedTimestamp =
         cachedSnapshot.fetched_at || cachedSnapshot.cached_at || cachedSnapshot.rows[0]?.fetched_at || null;
 
@@ -1917,6 +2005,7 @@ async function renderDashboard() {
       return;
     }
 
+    runtimeState.funnelLabelsByKey = {};
     applyDashboardViewModel(buildDashboardErrorViewModel(state.brand, error.message));
     setStaleBanner({
       level: "danger",
@@ -1928,6 +2017,24 @@ async function renderDashboard() {
       freshnessText: "Supabase gagal dimuat dan browser belum punya snapshot lokal untuk brand ini.",
     });
   }
+}
+
+function buildDashboardAdReferences(rows) {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows
+    .filter(function filterRow(row) {
+      return row && (row.library_id || row.destination_url || row.ad_id);
+    })
+    .map(function mapRow(row) {
+      return {
+        adId: row.ad_id || null,
+        libraryId: row.library_id || null,
+        destinationUrl: row.destination_url || null,
+      };
+    });
 }
 
 function applyIntelligenceCards(cards) {
