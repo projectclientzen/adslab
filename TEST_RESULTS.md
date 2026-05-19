@@ -1756,3 +1756,209 @@ Catatan:
 ```text
 Self-review difokuskan pada 4 area: cache localStorage, threshold `4/6 jam`, fallback error path dengan cache, dan hidden/visible state banner pada section dashboard.
 ```
+
+## 37. TASK-012 admin flag
+
+Command:
+```bash
+grep -n "IS_ADMIN\|admin=1\|admin.*param" prototype_ui/app.js | wc -l
+```
+
+Output:
+```text
+4
+```
+
+## 38. TASK-012 status ratio logic
+
+Command:
+```bash
+grep -n "getStatus\|ratio\|good.*caution\|caution.*risk" prototype_ui/app.js | wc -l
+```
+
+Output:
+```text
+5
+```
+
+## 39. TASK-012 app syntax
+
+Command:
+```bash
+node --check prototype_ui/app.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax valid setelah penambahan admin KPI config.
+
+## 40. TASK-012 save and edit wiring
+
+Command:
+```bash
+rg -n "saveCampaignTargetValue|fetchKpiTargetsForBrand|data-edit-kpi|data-save-kpi|kpi-config|window.IS_ADMIN" prototype_ui/app.js prototype_ui/styles.css
+```
+
+Output:
+```text
+prototype_ui/app.js:452:window.IS_ADMIN = IS_ADMIN;
+prototype_ui/app.js:759:async function fetchKpiTargetsForBrand(brand) {
+prototype_ui/app.js:840:async function saveCampaignTargetValue(campaignId, kpiType, value) {
+prototype_ui/app.js:1358:      <div class="kpi-config-display">
+prototype_ui/app.js:1360:        <span class="kpi-config-note">${campaign.targetMeta}</span>
+prototype_ui/app.js:1369:      <div class="kpi-config-editor">
+prototype_ui/app.js:1370:        <label class="kpi-config-label" for="kpi-target-${campaign.id}">${metricLabel} target</label>
+prototype_ui/app.js:1372:          class="kpi-config-input"
+prototype_ui/app.js:1379:        <div class="kpi-config-actions">
+prototype_ui/app.js:1380:          <button class="campaign-toggle kpi-save-button" data-save-kpi="${campaign.id}" data-kpi-type="${campaign.metricType}" ${isSaving ? "disabled" : ""}>
+prototype_ui/app.js:1392:    <div class="kpi-config-display">
+prototype_ui/app.js:1394:      <span class="kpi-config-note">${campaign.targetMeta}</span>
+prototype_ui/app.js:1395:      <button class="campaign-toggle kpi-edit-button" data-edit-kpi="${campaign.id}" aria-label="Edit KPI target">
+prototype_ui/app.js:1403:  document.querySelectorAll("[data-edit-kpi]").forEach((button) => {
+prototype_ui/app.js:1423:  document.querySelectorAll("[data-save-kpi]").forEach((button) => {
+prototype_ui/app.js:1432:        await saveCampaignTargetValue(campaignId, metricType, runtimeState.draftTargetValue);
+prototype_ui/app.js:1435:        console.warn("[ADS LAB] saveCampaignTargetValue fallback:", error.message);
+prototype_ui/app.js:1713:      await fetchKpiTargetsForBrand(state.brand),
+prototype_ui/styles.css:718:.kpi-config-display,
+prototype_ui/styles.css:719:.kpi-config-editor {
+prototype_ui/styles.css:724:.kpi-config-note,
+prototype_ui/styles.css:725:.kpi-config-label {
+prototype_ui/styles.css:730:.kpi-config-input {
+prototype_ui/styles.css:740:.kpi-config-input:focus {
+prototype_ui/styles.css:746:.kpi-config-actions {
+```
+
+## 41. TASK-012 working tree before log updates
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+ M prototype_ui/app.js
+ M prototype_ui/styles.css
+```
+
+Catatan:
+```text
+Pass TASK-012 ini hanya mengubah dua file prototype UI yang relevan dengan admin KPI config dan status calculation. Setelah section ini ditulis, dua file log wajib juga diperbarui sebagai deliverable task.
+```
+
+## 42. TASK-012 final working tree after log updates
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+ M CODEX_IMPLEMENTATION_LOG.md
+ M TEST_RESULTS.md
+ M prototype_ui/app.js
+ M prototype_ui/styles.css
+```
+
+## 43. TASK-010 follow-up real-data flag
+
+Command:
+```bash
+grep -n "USE_REAL_DATA" prototype_ui/app.js
+```
+
+Output:
+```text
+425:const USE_REAL_DATA = Boolean(window.SUPABASE_URL);
+536:  if (!USE_REAL_DATA || !window.supabase) {
+764:  if (!USE_REAL_DATA || !window.supabase) {
+1689:  if (USE_REAL_DATA) {
+1701:    if (!USE_REAL_DATA || typeof window.fetchLatestSnapshot !== "function") {
+1881:  if (USE_REAL_DATA && isSupabaseClientReady()) {
+1886:    if (!USE_REAL_DATA || typeof window.fetchAdsIntelligence !== "function") {
+```
+
+## 44. TASK-010 follow-up loading state markers
+
+Command:
+```bash
+grep -E "loading|skeleton|spinner" prototype_ui/app.js prototype_ui/styles.css | wc -l
+```
+
+Output:
+```text
+      35
+```
+
+## 45. TASK-010 follow-up app syntax
+
+Command:
+```bash
+node --check prototype_ui/app.js
+```
+
+Output:
+```text
+(no output)
+```
+
+Catatan: `node --check` exit code `0`, jadi syntax tetap valid setelah penambahan guard fallback mock.
+
+## 46. TASK-010 follow-up mock fallback guard wiring
+
+Command:
+```bash
+rg -n "isSupabaseClientReady|Using prototype mock data|Supabase client belum siap|fetchLatestSnapshot|fetchAdsIntelligence|fetch_status" prototype_ui/app.js prototype_ui/index.html prototype_ui/supabaseClient.js
+```
+
+Output:
+```text
+prototype_ui/supabaseClient.js:91:  async function fetchLatestSnapshot(brand, dateRange) {
+prototype_ui/supabaseClient.js:93:      logFallbackWarning("client tidak tersedia untuk fetchLatestSnapshot");
+prototype_ui/supabaseClient.js:117:      console.warn("[ADS LAB] fetchLatestSnapshot fallback:", result.error.message);
+prototype_ui/supabaseClient.js:124:  async function fetchAdsIntelligence(filters) {
+prototype_ui/supabaseClient.js:128:      logFallbackWarning("client tidak tersedia untuk fetchAdsIntelligence");
+prototype_ui/supabaseClient.js:152:      console.warn("[ADS LAB] fetchAdsIntelligence fallback:", result.error.message);
+prototype_ui/supabaseClient.js:199:  window.fetchLatestSnapshot = fetchLatestSnapshot;
+prototype_ui/supabaseClient.js:200:  window.fetchAdsIntelligence = fetchAdsIntelligence;
+prototype_ui/supabaseClient.js:203:    fetchLatestSnapshot: fetchLatestSnapshot,
+prototype_ui/supabaseClient.js:204:    fetchAdsIntelligence: fetchAdsIntelligence,
+prototype_ui/app.js:541:    .from("fetch_status")
+prototype_ui/app.js:547:    console.warn("[ADS LAB] fetch_status fallback:", result.error.message);
+prototype_ui/app.js:554:function isSupabaseClientReady() {
+prototype_ui/app.js:940:      { label: "Operator Action", value: "Cek logs", trend: "Lihat meta-fetch / fetch_status", chip: "Manual review" },
+prototype_ui/app.js:1040:        action: "Tunggu scheduled fetch berikutnya atau cek konfigurasi `meta-fetch` dan `fetch_status`.",
+prototype_ui/app.js:1701:    if (!USE_REAL_DATA || typeof window.fetchLatestSnapshot !== "function") {
+prototype_ui/app.js:1707:    if (!isSupabaseClientReady()) {
+prototype_ui/app.js:1712:        label: "Using prototype mock data",
+prototype_ui/app.js:1713:        freshnessText: "Supabase client belum siap, jadi dashboard memakai baseline mock.",
+prototype_ui/app.js:1718:    const snapshotRows = await window.fetchLatestSnapshot(state.brand, getDateRangeForState());
+prototype_ui/app.js:1881:  if (USE_REAL_DATA && isSupabaseClientReady()) {
+prototype_ui/app.js:1886:    if (!USE_REAL_DATA || typeof window.fetchAdsIntelligence !== "function") {
+prototype_ui/app.js:1891:    if (!isSupabaseClientReady()) {
+prototype_ui/app.js:1896:    const rows = await window.fetchAdsIntelligence({
+```
+
+## 47. TASK-010 follow-up working tree after patch
+
+Command:
+```bash
+git status --short
+```
+
+Output:
+```text
+ M CODEX_IMPLEMENTATION_LOG.md
+ M TEST_RESULTS.md
+ M prototype_ui/app.js
+ M prototype_ui/styles.css
+```
+
+Catatan:
+```text
+Dalam pass follow-up TASK-010 ini saya hanya mengubah `prototype_ui/app.js` serta dua file log. `prototype_ui/styles.css` sudah berada dalam status modified dari pass TASK-012 sebelumnya dan tidak disentuh lagi.
+```

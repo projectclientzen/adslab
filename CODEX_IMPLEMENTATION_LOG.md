@@ -233,3 +233,47 @@
 - Hal yang perlu direview Claude nanti:
   - cek apakah strategi mendeteksi `mock-fallback` dari helper sudah paling aman untuk membedakan error real vs data valid
   - cek apakah error state tanpa cache sudah cukup jelas untuk operator, atau perlu treatment visual yang lebih kuat di iterasi berikutnya
+
+## 2026-05-09 — TASK-012
+
+- Scope yang dikerjakan hanya `TASK-012`.
+- `PRD.md` tidak ada di repo, jadi referensi implementasi mengikuti `TASKS.md`, `ACCEPTANCE_CRITERIA.md`, dan kebutuhan KPI config admin di `ADS_LAB_PRD_v2 2.md`.
+- Memperbarui [prototype_ui/app.js](/Volumes/Daily Project/adslab/prototype_ui/app.js) untuk:
+  - menambahkan role sederhana `window.IS_ADMIN` dari URL param `?admin=1`
+  - membaca target KPI existing dari `campaign_kpi_targets` saat mode real-data aktif
+  - menambahkan state lokal untuk target per campaign, campaign yang sedang diedit, dan progress save
+  - menambahkan fungsi `getStatus(actual, target, metric)` sesuai rumus task untuk menghitung `good` / `caution` / `risk`
+  - mengganti perhitungan status campaign agar memakai target KPI per campaign, bukan threshold hardcoded per brand
+  - menambahkan inline KPI config editor pada campaign row: display-only untuk user biasa, edit/save/cancel untuk admin
+  - menyimpan perubahan via helper `saveKpiTarget()` dan memantulkan hasilnya ke UI tanpa reload
+- Memperbarui [prototype_ui/styles.css](/Volumes/Daily Project/adslab/prototype_ui/styles.css) untuk styling target chip, inline input, dan action button admin.
+- Tidak ada perubahan ke file lain di luar scope task ini; [prototype_ui/index.html](/Volumes/Daily Project/adslab/prototype_ui/index.html) tidak perlu diubah karena edit control diinjeksikan dari `app.js`.
+- Validasi dilakukan dengan grep admin flag, grep `getStatus` ratio logic, `node --check`, grep wiring save/edit target, dan self-review diff; detail output disimpan di `TEST_RESULTS.md`.
+- Self-review:
+  - edit control sekarang hanya muncul bila `?admin=1`; tanpa param itu UI tetap read-only
+  - status campaign sudah dihitung dari actual vs target KPI per campaign dengan fallback ke default target per brand
+  - perubahan target yang baru disimpan tetap dipertahankan di state lokal agar langsung tercermin walau round-trip Supabase belum ter-refresh
+- Asumsi implementasi:
+  - target KPI utama per brand untuk MVP: `roas` pada `ngajigaes`, `cpl` pada `labbaika` dan `alaika`
+  - edit control cukup ditempatkan di campaign row, tidak perlu modal terpisah, karena task mengizinkan inline edit
+  - helper `saveKpiTarget()` dari `supabaseClient.js` sudah tersedia global pada saat `app.js` dijalankan
+- Risiko tersisa:
+  - belum ada browser-run manual untuk memastikan `?admin=1` vs tanpa param benar-benar berbeda secara visual dari sisi DOM interaktif
+  - jika `campaign_kpi_targets` mengembalikan beberapa `kpi_type` untuk satu campaign, versi MVP ini mengambil satu row terakhir yang direduksi per `campaign_id`
+- Hal yang perlu direview Claude nanti:
+  - cek apakah pemilihan satu metric utama per brand sudah cukup, atau campaign tertentu perlu opsi target `reach` / `cpp` pada iterasi berikutnya
+  - cek apakah merge state lokal dan hasil fetch Supabase sudah paling aman untuk mencegah target yang baru disimpan terlihat hilang sesaat
+
+## 2026-05-19 — TASK-010 follow-up
+
+- Scope yang dikerjakan hanya `TASK-010`.
+- `PRD.md` tidak ada di repo, jadi referensi implementasi tetap mengikuti `TASKS.md`, `ACCEPTANCE_CRITERIA.md`, dan konteks dashboard di `ADS_LAB_PRD_v2 2.md`.
+- Memperbarui [prototype_ui/app.js](/Volumes/Daily Project/adslab/prototype_ui/app.js) dengan guard `isSupabaseClientReady()` untuk menutup gap fallback:
+  - bila `window.SUPABASE_URL` ada tetapi client Supabase belum benar-benar siap, `renderDashboard()` kembali ke mock baseline lama
+  - topbar menampilkan status netral `Using prototype mock data` agar operator tahu path mock sedang dipakai
+  - `renderIntelligence()` juga kembali ke baseline mock tanpa memaksa loading/fetch real-data
+- Tidak ada file fungsional lain yang diubah dalam pass ini; [prototype_ui/styles.css](/Volumes/Daily Project/adslab/prototype_ui/styles.css) memang sudah modified sebelumnya untuk `TASK-012`, tetapi tidak saya sentuh pada pass `TASK-010` ini.
+- Validasi dilakukan dengan grep `USE_REAL_DATA`, grep loading markers, `node --check`, grep wiring helper Supabase + guard baru, dan `git status --short`; detail output disimpan di `TEST_RESULTS.md`.
+- Risiko tersisa:
+  - belum ada browser-run manual untuk memverifikasi transisi visual saat `SUPABASE_URL` ada tetapi `SUPABASE_ANON_KEY` / CDN client belum siap
+  - path error real-data saat client tersedia tetapi query Supabase gagal tetap bergantung pada mekanisme cache/error banner dari implementasi sebelumnya

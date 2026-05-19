@@ -427,16 +427,29 @@ const DEFAULT_STATUS_TEXT = "Supabase fallback ready";
 const SNAPSHOT_CACHE_PREFIX = "adslab_snapshot_";
 const FRESH_WARNING_HOURS = 4;
 const FRESH_DANGER_HOURS = 6;
+const ADMIN_URL_PARAM = new URLSearchParams(window.location.search).get("admin");
+const IS_ADMIN = ADMIN_URL_PARAM === "1";
 const runtimeState = {
   dashboardRequestId: 0,
   intelligenceRequestId: 0,
   dashboardBanner: null,
+  kpiTargetsByCampaign: {},
+  editingCampaignId: null,
+  draftTargetValue: "",
+  savingCampaignId: null,
 };
 const brandTargets = {
   ngajigaes: { roas: 3, cpp: 45000 },
   labbaika: { cpl: 80000 },
   alaika: { cpl: 75000 },
 };
+const brandMetricConfig = {
+  ngajigaes: { metric: "roas", label: "ROAS", formatter: formatMultiplier },
+  labbaika: { metric: "cpl", label: "CPL", formatter: formatCurrency },
+  alaika: { metric: "cpl", label: "CPL", formatter: formatCurrency },
+};
+
+window.IS_ADMIN = IS_ADMIN;
 
 const funnelColors = {
   LP: "#d8b35d",
@@ -536,6 +549,10 @@ async function fetchFreshnessStatus(brand) {
   }
 
   return result.data || null;
+}
+
+function isSupabaseClientReady() {
+  return Boolean(window.supabase);
 }
 
 function getLatestFetchedAt(rows) {
@@ -737,6 +754,119 @@ function checkFreshness(timestamp, options) {
     level: "danger",
     message: `Data mungkin tidak akurat — cek Ads Manager. Last valid snapshot ${formatRelativeTime(timestamp)} • ${exactTime}.`,
   };
+}
+
+function getBrandMetricConfig(brandKey) {
+  return brandMetricConfig[brandKey] || { metric: "roas", label: "ROAS", formatter: formatMultiplier };
+}
+
+async function fetchKpiTargetsForBrand(brand) {
+  if (!USE_REAL_DATA || !window.supabase) {
+    return {};
+  }
+
+  const result = await window.supabase
+    .from("campaign_kpi_targets")
+    .select("*")
+    .eq("brand", brand);
+
+  if (result.error) {
+    console.warn("[ADS LAB] campaign_kpi_targets fallback:", result.error.message);
+    return {};
+  }
+
+  return (result.data || []).reduce((accumulator, row) => {
+    if (!row?.campaign_id || !row?.kpi_type) {
+      return accumulator;
+    }
+
+    accumulator[row.campaign_id] = {
+      kpiType: row.kpi_type,
+      targetValue: toFiniteNumber(row.target_value),
+      source: "supabase",
+    };
+    return accumulator;
+  }, {});
+}
+
+function getDefaultTargetConfig(brandKey) {
+  const metricConfig = getBrandMetricConfig(brandKey);
+  const defaultTargetValue = brandTargets[brandKey]?.[metricConfig.metric] || 0;
+
+  return {
+    kpiType: metricConfig.metric,
+    targetValue: defaultTargetValue,
+    source: "default",
+  };
+}
+
+function getCampaignTargetConfig(brandKey, campaignId) {
+  return runtimeState.kpiTargetsByCampaign[campaignId] || getDefaultTargetConfig(brandKey);
+}
+
+function getStatus(actual, target, metric) {
+  const actualValue = toFiniteNumber(actual);
+  const targetValue = toFiniteNumber(target);
+
+  if (actualValue <= 0 || targetValue <= 0) {
+    return "caution";
+  }
+
+  const ratio = metric === "cpl" || metric === "cpp" ? targetValue / actualValue : actualValue / targetValue;
+
+  if (ratio >= 1.0) {
+    return "good";
+  }
+
+  if (ratio >= 0.9) {
+    return "caution";
+  }
+
+  return "risk";
+}
+
+function formatTargetValue(metric, value) {
+  if (metric === "cpl" || metric === "cpp") {
+    return formatCurrency(value);
+  }
+
+  if (metric === "reach") {
+    return formatCompactNumber(value);
+  }
+
+  return formatMultiplier(value);
+}
+
+function getTargetSourceLabel(source) {
+  return source === "supabase" ? "Admin target" : "Default target";
+}
+
+async function saveCampaignTargetValue(campaignId, kpiType, value) {
+  const numericValue = Number(value);
+
+  if (!campaignId || !kpiType || !Number.isFinite(numericValue) || numericValue <= 0) {
+    throw new Error("Target KPI harus berupa angka lebih besar dari 0");
+  }
+
+  runtimeState.savingCampaignId = campaignId;
+
+  try {
+    const result = await window.saveKpiTarget(campaignId, kpiType, numericValue);
+
+    if (result?.error && !result?.mock) {
+      throw new Error(result.error.message || "Save KPI target gagal");
+    }
+
+    runtimeState.kpiTargetsByCampaign[campaignId] = {
+      kpiType: kpiType,
+      targetValue: numericValue,
+      source: result?.mock ? "default" : "supabase",
+    };
+    runtimeState.editingCampaignId = null;
+    runtimeState.draftTargetValue = "";
+  } finally {
+    runtimeState.savingCampaignId = null;
+  }
 }
 
 function getMetricSummary(brandKey, rows) {
@@ -1011,15 +1141,23 @@ function buildCampaignGroups(brandKey, rows) {
   return Array.from(campaigns.values())
     .map((campaign) => {
       const metrics = getMetricSummary(brandKey, campaign.rows);
+      const targetConfig = getCampaignTargetConfig(brandKey, campaign.id);
+      const tone = getHealthTone(brandKey, metrics, targetConfig);
       return {
+        id: campaign.id,
         name: campaign.name,
         status: "Active",
         spend: formatCurrency(metrics.spend),
         result: formatAggregateResult(brandKey, metrics),
         efficiency: formatAggregateEfficiency(brandKey, metrics),
         reach: formatCompactNumber(metrics.reach),
-        health: getHealthTone(brandKey, metrics),
-        healthLabel: getHealthLabel(brandKey, metrics),
+        health: tone,
+        healthLabel: getHealthLabel(tone),
+        targetLabel: `${getBrandMetricConfig(brandKey).label} target ${formatTargetValue(targetConfig.kpiType, targetConfig.targetValue)}`,
+        targetMeta: getTargetSourceLabel(targetConfig.source),
+        metricType: targetConfig.kpiType,
+        targetValue: targetConfig.targetValue,
+        actualMetricValue: getMetricActualValue(metrics, targetConfig.kpiType),
         adsets: Array.from(campaign.adsets.values()).map((adset) => {
           const adsetMetrics = getMetricSummary(brandKey, adset.rows);
           return {
@@ -1085,25 +1223,32 @@ function formatAggregateEfficiency(brandKey, metrics) {
   return `CPL ${formatCurrency(metrics.cpl)}`;
 }
 
-function getHealthTone(brandKey, metrics) {
-  if (brandKey === "ngajigaes") {
-    if (metrics.roas >= metrics.target.roas) {
-      return "good";
-    }
-
-    return metrics.roas >= metrics.target.roas * 0.85 ? "caution" : "risk";
+function getMetricActualValue(metrics, metric) {
+  if (metric === "roas") {
+    return metrics.roas;
   }
 
-  if (metrics.cpl <= metrics.target.cpl) {
-    return "good";
+  if (metric === "cpl") {
+    return metrics.cpl;
   }
 
-  return metrics.cpl <= metrics.target.cpl * 1.15 ? "caution" : "risk";
+  if (metric === "cpp") {
+    return metrics.cpp;
+  }
+
+  if (metric === "reach") {
+    return metrics.reach;
+  }
+
+  return metrics.roas;
 }
 
-function getHealthLabel(brandKey, metrics) {
-  const tone = getHealthTone(brandKey, metrics);
+function getHealthTone(brandKey, metrics, targetConfig) {
+  const safeTargetConfig = targetConfig || getDefaultTargetConfig(brandKey);
+  return getStatus(getMetricActualValue(metrics, safeTargetConfig.kpiType), safeTargetConfig.targetValue, safeTargetConfig.kpiType);
+}
 
+function getHealthLabel(tone) {
   if (tone === "good") {
     return "Hijau / on track";
   }
@@ -1205,6 +1350,101 @@ function renderIntelligenceLoading() {
     </div>
   `;
   document.getElementById("intelligence-cards").innerHTML = Array.from({ length: 4 }).map(() => loadingCard).join("");
+}
+
+function renderKpiConfig(campaign) {
+  const isEditing = IS_ADMIN && runtimeState.editingCampaignId === campaign.id;
+  const isSaving = runtimeState.savingCampaignId === campaign.id;
+  const metricLabel = campaign.metricType.toUpperCase();
+
+  if (!IS_ADMIN) {
+    return `
+      <div class="kpi-config-display">
+        <span class="metric-chip">${campaign.targetLabel}</span>
+        <span class="kpi-config-note">${campaign.targetMeta}</span>
+      </div>
+    `;
+  }
+
+  if (isEditing) {
+    const currentValue =
+      runtimeState.draftTargetValue || String(roundValue(toFiniteNumber(campaign.targetValue || 0), 2));
+    return `
+      <div class="kpi-config-editor">
+        <label class="kpi-config-label" for="kpi-target-${campaign.id}">${metricLabel} target</label>
+        <input
+          class="kpi-config-input"
+          id="kpi-target-${campaign.id}"
+          type="number"
+          step="0.01"
+          min="0"
+          value="${currentValue}"
+        />
+        <div class="kpi-config-actions">
+          <button class="campaign-toggle kpi-save-button" data-save-kpi="${campaign.id}" data-kpi-type="${campaign.metricType}" ${isSaving ? "disabled" : ""}>
+            ${isSaving ? "Saving..." : "Save"}
+          </button>
+          <button class="campaign-toggle kpi-cancel-button" data-cancel-kpi="${campaign.id}" ${isSaving ? "disabled" : ""}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="kpi-config-display">
+      <span class="metric-chip">${campaign.targetLabel}</span>
+      <span class="kpi-config-note">${campaign.targetMeta}</span>
+      <button class="campaign-toggle kpi-edit-button" data-edit-kpi="${campaign.id}" aria-label="Edit KPI target">
+        Edit target
+      </button>
+    </div>
+  `;
+}
+
+function bindKpiConfigActions() {
+  document.querySelectorAll("[data-edit-kpi]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const campaignId = button.dataset.editKpi;
+      const currentTarget = runtimeState.kpiTargetsByCampaign[campaignId]?.targetValue;
+
+      runtimeState.editingCampaignId = campaignId;
+      runtimeState.draftTargetValue =
+        currentTarget !== undefined ? String(currentTarget) : "";
+      void renderDashboard();
+    });
+  });
+
+  document.querySelectorAll("[data-cancel-kpi]").forEach((button) => {
+    button.addEventListener("click", () => {
+      runtimeState.editingCampaignId = null;
+      runtimeState.draftTargetValue = "";
+      void renderDashboard();
+    });
+  });
+
+  document.querySelectorAll("[data-save-kpi]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const campaignId = button.dataset.saveKpi;
+      const metricType = button.dataset.kpiType || getBrandMetricConfig(state.brand).metric;
+      const input = document.getElementById(`kpi-target-${campaignId}`);
+
+      runtimeState.draftTargetValue = input ? input.value : "";
+
+      try {
+        await saveCampaignTargetValue(campaignId, metricType, runtimeState.draftTargetValue);
+        void renderDashboard();
+      } catch (error) {
+        console.warn("[ADS LAB] saveCampaignTargetValue fallback:", error.message);
+        setTopbarState({
+          mode: "warning",
+          label: "KPI target save gagal",
+          freshnessText: error.message,
+        });
+      }
+    });
+  });
 }
 
 function renderOverview() {
@@ -1383,8 +1623,11 @@ function applyDashboardViewModel(brand) {
               <span>${campaign.result}</span>
               <span>${campaign.efficiency}</span>
               <span>${campaign.reach}</span>
-              <span class="status-text ${campaign.health}">${campaign.healthLabel}</span>
-              <button class="campaign-toggle">Detail</button>
+              <div class="campaign-health-cell">
+                <span class="status-text ${campaign.health}">${campaign.healthLabel}</span>
+                ${renderKpiConfig(campaign)}
+              </div>
+              <button class="campaign-toggle" data-toggle-details="true">Detail</button>
             </div>
             <div class="campaign-body">
               ${campaign.adsets
@@ -1428,11 +1671,13 @@ function applyDashboardViewModel(brand) {
       .join("");
   }
 
-  document.querySelectorAll(".campaign-toggle").forEach((button) => {
+  document.querySelectorAll("[data-toggle-details='true']").forEach((button) => {
     button.addEventListener("click", () => {
       button.closest(".campaign-group").classList.toggle("open");
     });
   });
+
+  bindKpiConfigActions();
 }
 
 async function renderDashboard() {
@@ -1459,6 +1704,17 @@ async function renderDashboard() {
       return;
     }
 
+    if (!isSupabaseClientReady()) {
+      applyDashboardViewModel(dashboardData[state.brand]);
+      setStaleBanner(null);
+      setTopbarState({
+        mode: "neutral",
+        label: "Using prototype mock data",
+        freshnessText: "Supabase client belum siap, jadi dashboard memakai baseline mock.",
+      });
+      return;
+    }
+
     const snapshotRows = await window.fetchLatestSnapshot(state.brand, getDateRangeForState());
 
     if (detectHelperMockRows(snapshotRows)) {
@@ -1466,6 +1722,11 @@ async function renderDashboard() {
     }
 
     const freshnessStatus = await fetchFreshnessStatus(state.brand);
+    runtimeState.kpiTargetsByCampaign = Object.assign(
+      {},
+      runtimeState.kpiTargetsByCampaign,
+      await fetchKpiTargetsForBrand(state.brand),
+    );
 
     if (requestId !== runtimeState.dashboardRequestId) {
       return;
@@ -1617,12 +1878,17 @@ function applyIntelligenceCards(cards) {
 async function renderIntelligence() {
   const requestId = ++runtimeState.intelligenceRequestId;
 
-  if (USE_REAL_DATA) {
+  if (USE_REAL_DATA && isSupabaseClientReady()) {
     renderIntelligenceLoading();
   }
 
   try {
     if (!USE_REAL_DATA || typeof window.fetchAdsIntelligence !== "function") {
+      applyIntelligenceCards(getBaseIntelligenceCards());
+      return;
+    }
+
+    if (!isSupabaseClientReady()) {
       applyIntelligenceCards(getBaseIntelligenceCards());
       return;
     }

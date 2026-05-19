@@ -686,6 +686,11 @@ body::before {
   font-size: 0.9rem;
 }
 
+.campaign-health-cell {
+  display: grid;
+  gap: 10px;
+}
+
 .campaign-title strong,
 .adset-row strong,
 .ad-row strong {
@@ -703,6 +708,51 @@ body::before {
 .campaign-toggle:hover {
   transform: translateY(-2px);
   background: rgba(216, 179, 93, 0.08);
+}
+
+.campaign-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.kpi-config-display,
+.kpi-config-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.kpi-config-note,
+.kpi-config-label {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.kpi-config-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font: inherit;
+}
+
+.kpi-config-input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(216, 179, 93, 0.12);
+}
+
+.kpi-config-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kpi-edit-button,
+.kpi-save-button,
+.kpi-cancel-button {
+  justify-self: start;
 }
 
 .campaign-body {
