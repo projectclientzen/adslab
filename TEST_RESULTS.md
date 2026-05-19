@@ -1962,3 +1962,54 @@ Catatan:
 ```text
 Dalam pass follow-up TASK-010 ini saya hanya mengubah `prototype_ui/app.js` serta dua file log. `prototype_ui/styles.css` sudah berada dalam status modified dari pass TASK-012 sebelumnya dan tidak disentuh lagi.
 ```
+
+## 48. TASK-010 self-review strict scope check
+
+Command:
+```bash
+rg -n "USE_REAL_DATA|isSupabaseClientReady|fetchLatestSnapshot|fetchAdsIntelligence|fetch_status|topbar-freshness|renderDashboard\\(|renderIntelligence\\(" prototype_ui/app.js prototype_ui/index.html
+```
+
+Output:
+```text
+prototype_ui/app.js:425:const USE_REAL_DATA = Boolean(window.SUPABASE_URL);
+prototype_ui/app.js:466:const topbarFreshness = document.getElementById("topbar-freshness");
+prototype_ui/app.js:536:  if (!USE_REAL_DATA || !window.supabase) {
+prototype_ui/app.js:541:    .from("fetch_status")
+prototype_ui/app.js:547:    console.warn("[ADS LAB] fetch_status fallback:", result.error.message);
+prototype_ui/app.js:554:function isSupabaseClientReady() {
+prototype_ui/app.js:764:  if (!USE_REAL_DATA || !window.supabase) {
+prototype_ui/app.js:1683:async function renderDashboard() {
+prototype_ui/app.js:1689:  if (USE_REAL_DATA) {
+prototype_ui/app.js:1701:    if (!USE_REAL_DATA || typeof window.fetchLatestSnapshot !== "function") {
+prototype_ui/app.js:1707:    if (!isSupabaseClientReady()) {
+prototype_ui/app.js:1718:    const snapshotRows = await window.fetchLatestSnapshot(state.brand, getDateRangeForState());
+prototype_ui/app.js:1878:async function renderIntelligence() {
+prototype_ui/app.js:1881:  if (USE_REAL_DATA && isSupabaseClientReady()) {
+prototype_ui/app.js:1886:    if (!USE_REAL_DATA || typeof window.fetchAdsIntelligence !== "function") {
+prototype_ui/app.js:1891:    if (!isSupabaseClientReady()) {
+prototype_ui/app.js:1896:    const rows = await window.fetchAdsIntelligence({
+prototype_ui/index.html:65:            <p class="topbar-freshness" id="topbar-freshness" hidden></p>
+```
+
+## 49. TASK-010 self-review syntax and loading markers
+
+Command:
+```bash
+node --check prototype_ui/app.js
+grep -E "loading|skeleton|spinner" prototype_ui/app.js prototype_ui/styles.css | wc -l
+git status --short
+```
+
+Output:
+```text
+(no output from node --check)
+35
+ M CODEX_IMPLEMENTATION_LOG.md
+ M TEST_RESULTS.md
+```
+
+Catatan:
+```text
+Self-review ketat tidak menemukan blocker besar untuk TASK-010. Setelah `node --check`, syntax tetap valid; marker loading masih jauh di atas minimum DoD; dan working tree akhir hanya berubah pada dua file log yang memang diperbarui untuk dokumentasi verifikasi ini.
+```

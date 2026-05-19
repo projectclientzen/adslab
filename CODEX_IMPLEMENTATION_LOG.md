@@ -277,3 +277,7 @@
 - Risiko tersisa:
   - belum ada browser-run manual untuk memverifikasi transisi visual saat `SUPABASE_URL` ada tetapi `SUPABASE_ANON_KEY` / CDN client belum siap
   - path error real-data saat client tersedia tetapi query Supabase gagal tetap bergantung pada mekanisme cache/error banner dari implementasi sebelumnya
+- Self-review: PASS
+  - DoD TASK-010 tetap terpenuhi: `USE_REAL_DATA` ada, loading state tetap ada, fetch helper Supabase tetap ter-wire, dan freshness timestamp masih punya target DOM + query `fetch_status`
+  - guard `isSupabaseClientReady()` hanya menutup gap fallback saat client belum siap; jalur real-data yang sudah ada tidak dirombak
+  - tidak ditemukan blocker besar yang mengharuskan status `BLOCKED`
