@@ -150,9 +150,8 @@ export default function AutomationPage() {
       {activeTab === 'Copy Management' && (
         <CopyManagement rows={COPY_ROWS.filter(r => filterBrand === 'ALL' || r.brand === filterBrand)} />
       )}
-      {activeTab === 'AI Copy Generator' && (
-        <AiCopyGenerator filterBrand={filterBrand} />
-      )}
+      {/* AI Copy Generator di-hold — uncomment saat provider API sudah final */}
+      {/* {activeTab === 'AI Copy Generator' && <AiCopyGenerator filterBrand={filterBrand} />} */}
       {activeTab === 'Queue Status' && (
         <div className="bg-card border border-border rounded-xl p-6 text-center text-text-muted text-sm">
           Queue detail — akan tersedia saat BE Phase 6 selesai
