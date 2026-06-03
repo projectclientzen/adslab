@@ -1,6 +1,6 @@
 [build]
-  command   = "npm run build"
-  publish   = ".next"
+  command = "npm install && npm run build"
+  publish = ".next"
 
 [build.environment]
   NODE_VERSION = "20"
@@ -9,10 +9,8 @@
   package = "@netlify/plugin-nextjs"
 
 [functions]
-  directory = "netlify/functions"
+  directory    = "netlify/functions"
   node_bundler = "esbuild"
 
-# Schedule Meta fetch every 4 hours
-[[edge_functions]]
-  path = "/.netlify/functions/generate-copy"
-  function = "generate-copy"
+[functions."meta-fetch-scheduled"]
+  schedule = "0 */4 * * *"
