@@ -1,22 +1,24 @@
 # ─── ADS LAB — Netlify Config ─────────────────────────────────────────────────
-# Base = ads-lab-fe (Next.js dashboard FE)
-# Functions = ads-lab-fe/netlify/functions/ (FE + BE functions together)
+# FE: Next.js static export (ads-lab-fe/out/)
+# Functions: ads-lab-fe/netlify/functions/
 
 [build]
   base    = "ads-lab-fe"
   command = "npm install && npm run build"
-  publish = ".next"
+  publish = "out"
 
 [build.environment]
   NODE_VERSION = "20"
 
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
-
 [functions]
-  directory        = "netlify/functions"
-  node_bundler     = "esbuild"
+  directory    = "netlify/functions"
+  node_bundler = "esbuild"
 
-# Meta API scheduled fetch — every 4 hours
 [functions."meta-fetch-scheduled"]
   schedule = "0 */4 * * *"
+
+# SPA fallback — semua route ke index.html, React Router handle client-side
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
