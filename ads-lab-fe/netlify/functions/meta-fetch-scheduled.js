@@ -2,7 +2,7 @@
 
 const metaFetch = require("./meta-fetch.js");
 const sendAlert = require("./send-alert.js");
-const { runAlertEngine } = require("../../prototype_ui/alertEngine.js");
+const { runAlertEngine } = require("./lib/alertEngine.js");
 
 const BRANDS = ["ngajigaes", "labbaika", "alaika"];
 const SCHEDULE_EXPRESSION = "0 */4 * * *";

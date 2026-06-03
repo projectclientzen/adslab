@@ -1,9 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',   // static export — deploy as pure static files, no server needed
-  trailingSlash: true, // generates /dashboard/index.html instead of /dashboard.html
+  output: 'export',
+  trailingSlash: true,
   images: {
-    unoptimized: true, // required for static export (no Image Optimization API)
+    unoptimized: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true, // skip ESLint during build — run separately via `npm run lint`
+  },
+  typescript: {
+    ignoreBuildErrors: false, // keep TypeScript errors as build failures
   },
 }
 module.exports = nextConfig

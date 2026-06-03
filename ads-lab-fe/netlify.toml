@@ -1,12 +1,9 @@
 [build]
   command = "npm install && npm run build"
-  publish = ".next"
+  publish = "out"
 
 [build.environment]
   NODE_VERSION = "20"
-
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
 
 [functions]
   directory    = "netlify/functions"
@@ -14,3 +11,8 @@
 
 [functions."meta-fetch-scheduled"]
   schedule = "0 */4 * * *"
+
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
